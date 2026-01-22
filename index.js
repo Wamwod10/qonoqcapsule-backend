@@ -9,9 +9,13 @@ const axios = require("axios");
 dotenv.config();
 
 const app = express();
-const PORT = 5000;
+const PORT = process.env.PORT || 5000;
 
-app.use(cors({ origin: ["http://localhost:5173", "https://qonoqcapsule.uz"] }));
+app.use(
+  cors({
+    origin: ["https://qonoqcapsule.uz", "http://localhost:5173"],
+  }),
+);
 app.use(express.json());
 
 /* ================= DB ================= */
@@ -156,7 +160,7 @@ app.post("/api/check-availability", (req, res) => {
   );
 });
 
-/* ================= OCTO PAYMENT ================= */
+/* ================= OCTO PAYMENT (PRODUCTION) ================= */
 
 app.post("/api/create-payment", async (req, res) => {
   try {
@@ -173,7 +177,7 @@ app.post("/api/create-payment", async (req, res) => {
       octo_secret: process.env.OCTO_SECRET,
       shop_transaction_id: orderId,
       auto_capture: true,
-      test: true, // production bo‘lsa false qilinadi
+      test: false, // ✅ REAL PAYMENT
       init_time: new Date().toISOString().slice(0, 19).replace("T", " "),
       total_sum: Number(amount),
       currency: "UZS",
@@ -189,7 +193,7 @@ app.post("/api/create-payment", async (req, res) => {
         { method: "humo" },
       ],
       return_url: "https://qonoqcapsule.uz/my-booking",
-      notify_url: "https://qonoqcapsule.uz/api/octo-callback",
+      notify_url: "https://qonoqcapsule-backend.onrender.com/api/octo-callback",
       language: "uz",
       ttl: 15,
     };
@@ -204,9 +208,7 @@ app.post("/api/create-payment", async (req, res) => {
 
     if (data.error !== 0) {
       console.error("OCTO ERROR RESPONSE:", data);
-      return res
-        .status(500)
-        .json({ error: data.errMessage || "Octo error", data });
+      return res.status(500).json({ error: data.errMessage || "Octo error" });
     }
 
     res.json({
@@ -216,21 +218,19 @@ app.post("/api/create-payment", async (req, res) => {
     });
   } catch (err) {
     console.error("OCTO PAY ERROR:", err.response?.data || err.message);
-    res
-      .status(500)
-      .json({ error: "Payment create failed", detail: err.response?.data });
+    res.status(500).json({ error: "Payment create failed" });
   }
 });
 
 /* ================= OCTO CALLBACK ================= */
 
 app.post("/api/octo-callback", (req, res) => {
-  console.log("OCTO CALLBACK:", req.body);
+  console.log("✅ OCTO CALLBACK:", req.body);
   res.json({ status: "ok" });
 });
 
 /* ================= START ================= */
 
 app.listen(PORT, () => {
-  console.log(`✅ Backend running on http://localhost:${PORT}`);
+  console.log("🚀 Server running on port", PORT);
 });

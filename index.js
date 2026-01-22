@@ -1,0 +1,236 @@
+const express = require("express");
+const cors = require("cors");
+const dotenv = require("dotenv");
+const path = require("path");
+const sqlite3 = require("sqlite3").verbose();
+const crypto = require("crypto");
+const axios = require("axios");
+
+dotenv.config();
+
+const app = express();
+const PORT = 5000;
+
+app.use(cors({ origin: ["http://localhost:5173", "https://qonoqcapsule.uz"] }));
+app.use(express.json());
+
+/* ================= DB ================= */
+
+const DB_PATH = path.join(__dirname, "bookings.db");
+
+const db = new sqlite3.Database(DB_PATH, (err) => {
+  if (err) console.error("DB ERROR:", err.message);
+  else console.log("✅ SQLite connected");
+});
+
+db.run(`
+  CREATE TABLE IF NOT EXISTS bookings (
+    id TEXT PRIMARY KEY,
+    branch TEXT,
+    capsuleType TEXT,
+    date TEXT,
+    time TEXT,
+    duration INTEGER,
+    createdAt TEXT
+  )
+`);
+
+/* ================= TEST ================= */
+
+app.get("/", (req, res) => {
+  res.send("Backend is working ✅");
+});
+
+/* ================= BOOKINGS ================= */
+
+app.get("/api/bookings", (req, res) => {
+  db.all("SELECT * FROM bookings ORDER BY date, time", [], (err, rows) => {
+    if (err) {
+      console.error("DB GET ERROR:", err);
+      return res.status(500).json({ error: "DB error" });
+    }
+    res.json(rows);
+  });
+});
+
+app.post("/api/bookings", (req, res) => {
+  const { branch, capsuleType, date, time, duration } = req.body;
+
+  if (!branch || !capsuleType || !date || !time || !duration) {
+    return res.status(400).json({ error: "Missing fields" });
+  }
+
+  const id = crypto.randomUUID();
+  const createdAt = new Date().toISOString();
+
+  db.run(
+    `INSERT INTO bookings (id, branch, capsuleType, date, time, duration, createdAt)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [id, branch, capsuleType, date, time, Number(duration), createdAt],
+    function (err) {
+      if (err) {
+        console.error("DB INSERT ERROR:", err);
+        return res.status(500).json({ error: "Insert failed" });
+      }
+
+      res.json({
+        success: true,
+        booking: { id, branch, capsuleType, date, time, duration, createdAt },
+      });
+    },
+  );
+});
+
+app.delete("/api/bookings/:id", (req, res) => {
+  const { id } = req.params;
+
+  db.run("DELETE FROM bookings WHERE id = ?", [id], function (err) {
+    if (err) {
+      console.error("DB DELETE ERROR:", err);
+      return res.status(500).json({ error: "Delete failed" });
+    }
+
+    res.json({ success: true });
+  });
+});
+
+/* ================= AVAILABILITY CHECK ================= */
+
+function toMinutes(t) {
+  const [h, m] = t.split(":").map(Number);
+  return h * 60 + m;
+}
+
+app.post("/api/check-availability", (req, res) => {
+  const { branch, capsuleType, date, time, duration } = req.body;
+
+  if (!branch || !capsuleType || !date || !time || !duration) {
+    return res.status(400).json({ error: "Missing fields" });
+  }
+
+  const limit = capsuleType === "family" ? 2 : 4;
+
+  const reqStart = toMinutes(time);
+  const reqEnd = reqStart + Number(duration) * 60;
+
+  db.all(
+    `SELECT * FROM bookings WHERE branch=? AND capsuleType=? AND date=?`,
+    [branch, capsuleType, date],
+    (err, rows) => {
+      if (err) {
+        console.error("AVAIL DB ERROR:", err);
+        return res.status(500).json({ error: "DB error" });
+      }
+
+      const overlaps = rows.filter((b) => {
+        const s = toMinutes(b.time);
+        const e = s + Number(b.duration) * 60;
+        return reqStart < e && reqEnd > s;
+      });
+
+      if (overlaps.length < limit) {
+        return res.json({ available: true });
+      }
+
+      const nextFree = Math.min(
+        ...overlaps.map((b) => toMinutes(b.time) + Number(b.duration) * 60),
+      );
+
+      let totalMinutes = nextFree;
+      let nextDay = false;
+
+      if (totalMinutes >= 1440) {
+        totalMinutes = totalMinutes % 1440;
+        nextDay = true;
+      }
+
+      const hh = String(Math.floor(totalMinutes / 60)).padStart(2, "0");
+      const mm = String(totalMinutes % 60).padStart(2, "0");
+
+      return res.json({
+        available: false,
+        nextTime: `${hh}:${mm}`,
+        nextDay,
+      });
+    },
+  );
+});
+
+/* ================= OCTO PAYMENT ================= */
+
+app.post("/api/create-payment", async (req, res) => {
+  try {
+    const { amount, bookings } = req.body;
+
+    if (!amount || !bookings || !bookings.length) {
+      return res.status(400).json({ error: "Amount & bookings required" });
+    }
+
+    const orderId = crypto.randomUUID();
+
+    const payload = {
+      octo_shop_id: Number(process.env.OCTO_SHOP_ID),
+      octo_secret: process.env.OCTO_SECRET,
+      shop_transaction_id: orderId,
+      auto_capture: true,
+      test: true, // production bo‘lsa false qilinadi
+      init_time: new Date().toISOString().slice(0, 19).replace("T", " "),
+      total_sum: Number(amount),
+      currency: "UZS",
+      description: "Qonoq Capsule Booking",
+      basket: bookings.map((b) => ({
+        position_desc: `${b.capsuleTypeValue} | ${b.checkIn} ${b.checkInTime}`,
+        count: 1,
+        price: Number(b.price),
+      })),
+      payment_methods: [
+        { method: "bank_card" },
+        { method: "uzcard" },
+        { method: "humo" },
+      ],
+      return_url: "https://qonoqcapsule.uz/my-booking",
+      notify_url: "https://qonoqcapsule.uz/api/octo-callback",
+      language: "uz",
+      ttl: 15,
+    };
+
+    const response = await axios.post(
+      "https://secure.octo.uz/prepare_payment",
+      payload,
+      { headers: { "Content-Type": "application/json" } },
+    );
+
+    const data = response.data;
+
+    if (data.error !== 0) {
+      console.error("OCTO ERROR RESPONSE:", data);
+      return res
+        .status(500)
+        .json({ error: data.errMessage || "Octo error", data });
+    }
+
+    res.json({
+      paymentUrl: data.data.octo_pay_url,
+      octoPaymentId: data.data.octo_payment_UUID,
+      orderId,
+    });
+  } catch (err) {
+    console.error("OCTO PAY ERROR:", err.response?.data || err.message);
+    res
+      .status(500)
+      .json({ error: "Payment create failed", detail: err.response?.data });
+  }
+});
+
+/* ================= OCTO CALLBACK ================= */
+
+app.post("/api/octo-callback", (req, res) => {
+  console.log("OCTO CALLBACK:", req.body);
+  res.json({ status: "ok" });
+});
+
+/* ================= START ================= */
+
+app.listen(PORT, () => {
+  console.log(`✅ Backend running on http://localhost:${PORT}`);
+});

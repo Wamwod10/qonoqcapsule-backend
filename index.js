@@ -199,7 +199,7 @@ app.post("/api/create-payment", async (req, res) => {
         { method: "uzcard" },
         { method: "humo" },
       ],
-      return_url: "https://qonoqcapsule.uz/my-booking",
+      return_url: "https://qonoqcapsule.uz/success",
       notify_url: "https://qonoqcapsule-backend.onrender.com/api/octo-callback",
       language: "uz",
       ttl: 15,

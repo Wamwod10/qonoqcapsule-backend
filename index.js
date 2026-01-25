@@ -1,12 +1,15 @@
-const express = require("express");
-const cors = require("cors");
-const dotenv = require("dotenv");
-const path = require("path");
-const sqlite3 = require("sqlite3").verbose();
-const crypto = require("crypto");
-const axios = require("axios");
+import express from "express";
+import cors from "cors";
+import dotenv from "dotenv";
+import path from "path";
+import sqlite3 from "sqlite3";
+import crypto from "crypto";
+import axios from "axios";
+import { fileURLToPath } from "url";
 
 dotenv.config();
+
+/* ================= APP ================= */
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -18,10 +21,14 @@ app.use(
 );
 app.use(express.json());
 
+/* ================= PATH FIX (ES MODULE) ================= */
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 /* ================= DB ================= */
 
 const DB_PATH = path.join(__dirname, "bookings.db");
-
 const db = new sqlite3.Database(DB_PATH, (err) => {
   if (err) console.error("DB ERROR:", err.message);
   else console.log("✅ SQLite connected");
@@ -98,7 +105,7 @@ app.delete("/api/bookings/:id", (req, res) => {
   });
 });
 
-/* ================= AVAILABILITY CHECK ================= */
+/* ================= AVAILABILITY ================= */
 
 function toMinutes(t) {
   const [h, m] = t.split(":").map(Number);
@@ -160,7 +167,7 @@ app.post("/api/check-availability", (req, res) => {
   );
 });
 
-/* ================= OCTO PAYMENT (PRODUCTION) ================= */
+/* ================= OCTO PAYMENT ================= */
 
 app.post("/api/create-payment", async (req, res) => {
   try {
@@ -177,7 +184,7 @@ app.post("/api/create-payment", async (req, res) => {
       octo_secret: process.env.OCTO_SECRET,
       shop_transaction_id: orderId,
       auto_capture: true,
-      test: false, // ✅ REAL PAYMENT
+      test: false,
       init_time: new Date().toISOString().slice(0, 19).replace("T", " "),
       total_sum: Number(amount),
       currency: "UZS",
@@ -207,7 +214,7 @@ app.post("/api/create-payment", async (req, res) => {
     const data = response.data;
 
     if (data.error !== 0) {
-      console.error("OCTO ERROR RESPONSE:", data);
+      console.error("OCTO ERROR:", data);
       return res.status(500).json({ error: data.errMessage || "Octo error" });
     }
 
@@ -222,11 +229,63 @@ app.post("/api/create-payment", async (req, res) => {
   }
 });
 
-/* ================= OCTO CALLBACK ================= */
-
 app.post("/api/octo-callback", (req, res) => {
   console.log("✅ OCTO CALLBACK:", req.body);
   res.json({ status: "ok" });
+});
+
+/* ================= TELEGRAM CONTACT BOT ================= */
+
+app.post("/notify/telegram", async (req, res) => {
+  try {
+    const { text } = req.body;
+
+    const url = `https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`;
+
+    await axios.post(url, {
+      chat_id: process.env.CHAT_ID,
+      text,
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.log(
+      "TELEGRAM CONTACT ERROR:",
+      error.response?.data || error.message,
+    );
+    res.status(500).json({ success: false });
+  }
+});
+
+/* ================= TELEGRAM BOOKING BOT ================= */
+
+app.post("/notify/booking", async (req, res) => {
+  try {
+    const { booking } = req.body;
+
+    const text = `📢 Yangi bron qabul qilindi
+
+👤 Ism: ${booking.name}
+📧 Email: ${booking.email}
+📞 Telefon: ${booking.phone}
+
+🗓 Kirish: ${booking.checkIn}
+⏰ Chiqish: ${booking.checkOut}
+🛏 Xona: ${booking.room}
+💶 Narx: ${booking.price}`;
+
+    const url = `https://api.telegram.org/bot${process.env.BOOKING_BOT_TOKEN}/sendMessage`;
+
+    await axios.post(url, {
+      chat_id: process.env.BOOKING_CHAT_ID,
+      text,
+    });
+
+    res.json({ success: true });
+  } catch (err) {
+    console.log("TELEGRAM BOOKING ERROR:", err.response?.data || err.message);
+    res.status(500).json({ success: false });
+  }
 });
 
 /* ================= START ================= */

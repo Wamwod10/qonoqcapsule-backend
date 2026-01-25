@@ -184,7 +184,7 @@ app.post("/api/create-payment", async (req, res) => {
       octo_secret: process.env.OCTO_SECRET,
       shop_transaction_id: orderId,
       auto_capture: true,
-      test: false,
+      test: true,
       init_time: new Date().toISOString().slice(0, 19).replace("T", " "),
       total_sum: Number(amount),
       currency: "UZS",

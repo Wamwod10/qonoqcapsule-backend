@@ -6,7 +6,6 @@ import sqlite3 from "sqlite3";
 import crypto from "crypto";
 import axios from "axios";
 import { fileURLToPath } from "url";
-
 import nodemailer from "nodemailer";
 
 dotenv.config();
@@ -52,6 +51,18 @@ db.run(`
 
 app.get("/", (req, res) => {
   res.send("Backend is working ✅");
+});
+
+/* ================= EMAIL TRANSPORTER ================= */
+
+const mailTransporter = nodemailer.createTransport({
+  host: "smtp.gmail.com",
+  port: 465,
+  secure: true,
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  },
 });
 
 /* ================= BOOKINGS ================= */
@@ -290,29 +301,15 @@ app.post("/notify/booking", async (req, res) => {
   }
 });
 
-/* ================= START ================= */
-
-app.listen(PORT, () => {
-  console.log("🚀 Server running on port", PORT);
-});
-
-/* ================= EMAIL NOTIFICATION SETUP ================= */
+/* ================= EMAIL TO USER ================= */
 
 app.post("/notify/email", async (req, res) => {
   try {
     const { booking } = req.body;
 
-    if (!booking?.email) {
+    if (!booking || !booking.email) {
       return res.status(400).json({ error: "Email not provided" });
     }
-
-    const transporter = nodemailer.createTransport({
-      service: "gmail",
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
-      },
-    });
 
     const text = `
 Bron tasdiqlandi ✅
@@ -327,7 +324,7 @@ Xona: ${booking.room}
 Narx: ${booking.price}
 `;
 
-    await transporter.sendMail({
+    await mailTransporter.sendMail({
       from: `"Qonoq Capsule" <${process.env.EMAIL_USER}>`,
       to: booking.email,
       subject: "Bron tasdiqlandi",
@@ -336,7 +333,13 @@ Narx: ${booking.price}
 
     res.json({ success: true });
   } catch (err) {
-    console.log("EMAIL ERROR:", err.message);
+    console.log("EMAIL ERROR:", err);
     res.status(500).json({ success: false });
   }
+});
+
+/* ================= START ================= */
+
+app.listen(PORT, () => {
+  console.log("🚀 Server running on port", PORT);
 });

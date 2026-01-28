@@ -7,6 +7,8 @@ import crypto from "crypto";
 import axios from "axios";
 import { fileURLToPath } from "url";
 
+import nodemailer from "nodemailer";
+
 dotenv.config();
 
 /* ================= APP ================= */
@@ -292,4 +294,49 @@ app.post("/notify/booking", async (req, res) => {
 
 app.listen(PORT, () => {
   console.log("🚀 Server running on port", PORT);
+});
+
+/* ================= EMAIL NOTIFICATION SETUP ================= */
+
+app.post("/notify/email", async (req, res) => {
+  try {
+    const { booking } = req.body;
+
+    if (!booking?.email) {
+      return res.status(400).json({ error: "Email not provided" });
+    }
+
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
+      },
+    });
+
+    const text = `
+Bron tasdiqlandi ✅
+
+Ism: ${booking.name}
+Email: ${booking.email}
+Telefon: ${booking.phone}
+
+Kirish: ${booking.checkIn}
+Chiqish: ${booking.checkOut}
+Xona: ${booking.room}
+Narx: ${booking.price}
+`;
+
+    await transporter.sendMail({
+      from: `"Qonoq Capsule" <${process.env.EMAIL_USER}>`,
+      to: booking.email,
+      subject: "Bron tasdiqlandi",
+      text,
+    });
+
+    res.json({ success: true });
+  } catch (err) {
+    console.log("EMAIL ERROR:", err.message);
+    res.status(500).json({ success: false });
+  }
 });

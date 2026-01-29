@@ -120,9 +120,10 @@ app.delete("/api/bookings/:id", (req, res) => {
 
 /* ================= AVAILABILITY ================= */
 
-function toMinutes(t) {
-  const [h, m] = t.split(":").map(Number);
-  return h * 60 + m;
+/* ================= AVAILABILITY ================= */
+
+function toDateTime(date, time) {
+  return new Date(`${date}T${time}:00`);
 }
 
 app.post("/api/check-availability", (req, res) => {
@@ -132,14 +133,17 @@ app.post("/api/check-availability", (req, res) => {
     return res.status(400).json({ error: "Missing fields" });
   }
 
+  // capacity
   const limit = capsuleType === "family" ? 2 : 4;
 
-  const reqStart = toMinutes(time);
-  const reqEnd = reqStart + Number(duration) * 60;
+  const reqStart = toDateTime(date, time);
+  const reqEnd = new Date(
+    reqStart.getTime() + Number(duration) * 60 * 60 * 1000,
+  );
 
   db.all(
-    `SELECT * FROM bookings WHERE branch=? AND capsuleType=? AND date=?`,
-    [branch, capsuleType, date],
+    `SELECT * FROM bookings WHERE branch=? AND capsuleType=?`,
+    [branch, capsuleType],
     (err, rows) => {
       if (err) {
         console.error("AVAIL DB ERROR:", err);
@@ -147,29 +151,33 @@ app.post("/api/check-availability", (req, res) => {
       }
 
       const overlaps = rows.filter((b) => {
-        const s = toMinutes(b.time);
-        const e = s + Number(b.duration) * 60;
-        return reqStart < e && reqEnd > s;
+        const bStart = toDateTime(b.date, b.time);
+        const bEnd = new Date(
+          bStart.getTime() + Number(b.duration) * 60 * 60 * 1000,
+        );
+
+        // overlap rule
+        return reqStart < bEnd && reqEnd > bStart;
       });
 
       if (overlaps.length < limit) {
         return res.json({ available: true });
       }
 
-      const nextFree = Math.min(
-        ...overlaps.map((b) => toMinutes(b.time) + Number(b.duration) * 60),
+      // nearest free time
+      const nextFreeDate = new Date(
+        Math.min(
+          ...overlaps.map((b) => {
+            const s = toDateTime(b.date, b.time);
+            return s.getTime() + Number(b.duration) * 60 * 60 * 1000;
+          }),
+        ),
       );
 
-      let totalMinutes = nextFree;
-      let nextDay = false;
+      const hh = String(nextFreeDate.getHours()).padStart(2, "0");
+      const mm = String(nextFreeDate.getMinutes()).padStart(2, "0");
 
-      if (totalMinutes >= 1440) {
-        totalMinutes = totalMinutes % 1440;
-        nextDay = true;
-      }
-
-      const hh = String(Math.floor(totalMinutes / 60)).padStart(2, "0");
-      const mm = String(totalMinutes % 60).padStart(2, "0");
+      const nextDay = nextFreeDate.toDateString() !== reqStart.toDateString();
 
       return res.json({
         available: false,

@@ -364,5 +364,5 @@ ${booking.duration}`,
 /* ================= START ================= */
 
 app.listen(PORT, () => {
-  console.log("🚀 Server good running on", PORT);
+  console.log("🚀 Server is good running on", PORT);
 });

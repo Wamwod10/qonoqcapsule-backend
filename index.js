@@ -270,6 +270,11 @@ app.post("/api/create-payment", async (req, res) => {
     const response = await axios.post(
       "https://secure.octo.uz/prepare_payment",
       payload,
+      {
+        headers: {
+          "Content-Type": "application/json",
+        },
+      },
     );
 
     const data = response.data;

@@ -232,7 +232,7 @@ app.post("/api/create-payment", async (req, res) => {
       octo_secret: process.env.OCTO_SECRET,
       shop_transaction_id: orderId,
       auto_capture: true,
-      test: true,
+      test: false,
 
       init_time: new Date().toISOString().slice(0, 19).replace("T", " "),
 

@@ -128,6 +128,29 @@ async function checkAvailability({
   };
 }
 
+app.post("/api/check-availability", async (req, res) => {
+  try {
+    const { branch, capsuleType, date, time, duration } = req.body;
+
+    if (!branch || !capsuleType || !date || !time || !duration) {
+      return res.status(400).json({ error: "Missing fields" });
+    }
+
+    const result = await checkAvailability({
+      branch,
+      capsuleType,
+      date,
+      time,
+      duration,
+    });
+
+    res.json(result);
+  } catch (err) {
+    console.error("CHECK AVAILABILITY ERROR:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 /* ================= BOOKINGS ================= */
 
 app.get("/api/bookings", async (req, res) => {
@@ -304,7 +327,9 @@ app.post("/notify/booking", async (req, res) => {
     }
 
     const locationName =
-      booking.locationLabel === "sam" ? "Samarkand Station" : "Tashkent Airport";
+      booking.locationLabel === "sam"
+        ? "Samarkand Station"
+        : "Tashkent Airport";
 
     const text = `📢 Yangi bron qabul qilindi
 

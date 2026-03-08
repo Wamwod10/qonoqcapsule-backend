@@ -1,10 +1,10 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-import path from "path";
 import crypto from "crypto";
 import axios from "axios";
 import { fileURLToPath } from "url";
+import path from "path";
 import nodemailer from "nodemailer";
 import pkg from "pg";
 
@@ -12,10 +12,10 @@ dotenv.config();
 
 const { Pool } = pkg;
 
-/* ================= APP ================= */
-
 const app = express();
 const PORT = process.env.PORT || 5000;
+
+/* ================= MIDDLEWARE ================= */
 
 app.use(
   cors({
@@ -25,7 +25,7 @@ app.use(
 
 app.use(express.json());
 
-/* ================= PATH FIX ================= */
+/* ================= PATH ================= */
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -54,7 +54,7 @@ async function initDB() {
 }
 
 initDB().catch((err) => {
-  console.error("DB ERROR:", err);
+  console.error("DB INIT ERROR:", err);
   process.exit(1);
 });
 
@@ -80,10 +80,6 @@ const mailTransporter = nodemailer.createTransport({
 
 function toDateTime(date, time) {
   return new Date(`${date}T${time}:00`);
-}
-
-function cleanPhone(phone) {
-  return String(phone).replace(/\D/g, "");
 }
 
 async function checkAvailability({
@@ -128,13 +124,11 @@ async function checkAvailability({
   };
 }
 
+/* ================= AVAILABILITY ================= */
+
 app.post("/api/check-availability", async (req, res) => {
   try {
     const { branch, capsuleType, date, time, duration } = req.body;
-
-    if (!branch || !capsuleType || !date || !time || !duration) {
-      return res.status(400).json({ error: "Missing fields" });
-    }
 
     const result = await checkAvailability({
       branch,
@@ -146,7 +140,7 @@ app.post("/api/check-availability", async (req, res) => {
 
     res.json(result);
   } catch (err) {
-    console.error("CHECK AVAILABILITY ERROR:", err);
+    console.error("AVAILABILITY ERROR:", err);
     res.status(500).json({ error: "Server error" });
   }
 });
@@ -161,17 +155,13 @@ app.get("/api/bookings", async (req, res) => {
 
     res.json(result.rows);
   } catch (err) {
-    console.error(err);
+    console.error("GET BOOKINGS ERROR:", err);
     res.status(500).json({ error: "DB error" });
   }
 });
 
 app.post("/api/bookings", async (req, res) => {
   const { branch, capsuleType, date, time, duration } = req.body;
-
-  if (!branch || !capsuleType || !date || !time || !duration) {
-    return res.status(400).json({ error: "Missing fields" });
-  }
 
   try {
     const avail = await checkAvailability({
@@ -201,7 +191,7 @@ app.post("/api/bookings", async (req, res) => {
 
     res.json({ success: true });
   } catch (err) {
-    console.error(err);
+    console.error("BOOKING ERROR:", err);
     res.status(500).json({ error: "Insert failed" });
   }
 });
@@ -215,15 +205,11 @@ app.delete("/api/bookings/:id", async (req, res) => {
   }
 });
 
-/* ================= PAYMENT ================= */
+/* ================= OCTO PAYMENT ================= */
 
 app.post("/api/create-payment", async (req, res) => {
   try {
-    const { amount, bookings, phone, email } = req.body;
-
-    if (!amount || !bookings?.length) {
-      return res.status(400).json({ error: "Invalid data" });
-    }
+    const { amount } = req.body;
 
     const orderId = crypto.randomUUID();
 
@@ -233,36 +219,12 @@ app.post("/api/create-payment", async (req, res) => {
       shop_transaction_id: orderId,
       auto_capture: true,
       test: false,
-
       init_time: new Date().toISOString().slice(0, 19).replace("T", " "),
-
       total_sum: Number(amount),
       currency: "UZS",
-
       description: "Qonoq Capsule Booking",
-
-      basket: bookings.map((b) => ({
-        name: "Capsule booking",
-        quantity: 1,
-        price: Number(b.price),
-      })),
-
-      user_data: {
-        user_id: orderId,
-        phone: cleanPhone(phone),
-        email: email || "",
-      },
-
-      payment_methods: [
-        { method: "bank_card" },
-        { method: "uzcard" },
-        { method: "humo" },
-      ],
-
       return_url: "https://qonoqcapsule.uz/success",
-
       notify_url: "https://qonoqcapsule-backend.onrender.com/api/octo-callback",
-
       language: "uz",
       ttl: 15,
     };
@@ -294,7 +256,7 @@ app.post("/api/create-payment", async (req, res) => {
   }
 });
 
-/* ================= PAYMENT CALLBACK ================= */
+/* ================= OCTO CALLBACK ================= */
 
 app.post("/api/octo-callback", (req, res) => {
   console.log("OCTO CALLBACK:", req.body);
@@ -313,8 +275,8 @@ app.post("/notify/telegram", async (req, res) => {
     });
 
     res.json({ success: true });
-  } catch (err) {
-    console.log(err);
+  } catch (error) {
+    console.log("TELEGRAM ERROR:", error);
     res.status(500).json({ success: false });
   }
 });
@@ -330,12 +292,6 @@ app.post("/notify/booking", async (req, res) => {
     if (booking.locationLabel === "sam") {
       chatId = process.env.CHAT_ID_S;
     }
-
-    const locationName =
-      booking.locationLabel === "sam"
-        ? "Samarkand Station"
-        : "Tashkent Airport";
-
     const text = `📢 Yangi bron qabul qilindi
 
 👤 Ism: ${booking.name}
@@ -363,7 +319,7 @@ app.post("/notify/booking", async (req, res) => {
 
     res.json({ success: true });
   } catch (err) {
-    console.log(err);
+    console.log("TELEGRAM BOOKING ERROR:", err);
     res.status(500).json({ success: false });
   }
 });
@@ -386,7 +342,7 @@ ${booking.duration}`,
 
     res.json({ success: true });
   } catch (err) {
-    console.log(err);
+    console.log("EMAIL ERROR:", err);
     res.status(500).json({ success: false });
   }
 });
@@ -394,5 +350,5 @@ ${booking.duration}`,
 /* ================= START ================= */
 
 app.listen(PORT, () => {
-  console.log("🚀 Server is good running on", PORT);
+  console.log("🚀 Server running on", PORT);
 });

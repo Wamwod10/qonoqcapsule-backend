@@ -8,7 +8,11 @@ import path from "path";
 import nodemailer from "nodemailer";
 import pkg from "pg";
 
-dotenv.config();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+dotenv.config({ path: path.resolve(process.cwd(), ".env") });
+dotenv.config({ path: path.join(__dirname, ".env") });
 
 const { Pool } = pkg;
 
@@ -183,9 +187,6 @@ app.use(
 app.use(express.json());
 
 /* ================= PATH ================= */
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 /* ================= DATABASE ================= */
 

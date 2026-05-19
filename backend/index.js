@@ -110,7 +110,9 @@ const formatTelegramPrice = (price) =>
   `${Number(price || 0).toLocaleString("en-US")} UZS`;
 
 const getTelegramCapsuleLabel = (capsuleType) =>
-  String(capsuleType || "").trim().toUpperCase();
+  String(capsuleType || "")
+    .trim()
+    .toUpperCase();
 
 const buildTelegramBookingText = ({ rawItem, item, payment, orderId }) => {
   const name =
@@ -204,6 +206,15 @@ async function initDB() {
       "createdAt" TEXT
     )
   `);
+
+  await pool.query(`
+  ALTER TABLE bookings
+  ADD COLUMN IF NOT EXISTS name TEXT,
+  ADD COLUMN IF NOT EXISTS phone TEXT,
+  ADD COLUMN IF NOT EXISTS email TEXT,
+  ADD COLUMN IF NOT EXISTS price NUMERIC DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS payment_status TEXT DEFAULT 'confirmed'
+`);
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS pending_payments (
@@ -582,10 +593,11 @@ async function finalizePayment(orderId, callbackPayload) {
 
       await client.query(
         `
-          INSERT INTO bookings (id, branch, "capsuleType", date, time, duration, "createdAt")
-          VALUES ($1,$2,$3,$4,$5,$6,$7)
-          ON CONFLICT (id) DO NOTHING
-        `,
+    INSERT INTO bookings 
+    (id, branch, "capsuleType", date, time, duration, "createdAt", name, phone, email, price, payment_status)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+    ON CONFLICT (id) DO NOTHING
+  `,
         [
           bookingId,
           item.branch,
@@ -594,6 +606,11 @@ async function finalizePayment(orderId, callbackPayload) {
           item.time,
           item.duration,
           createdAt,
+          rawItem.name || payment.name || "",
+          rawItem.phone || payment.phone || "",
+          rawItem.email || payment.email || "",
+          Number(rawItem.price || payment.amount || 0),
+          "paid",
         ],
       );
     }
@@ -730,6 +747,157 @@ app.delete("/api/bookings/:id", async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     console.error("DELETE BOOKING ERROR:", err);
+    res.status(500).json({ error: "Delete failed" });
+  }
+});
+
+/* ================= CAPSULE ADMIN PANEL ================= */
+
+app.get("/api/capsule-admin/bookings", async (req, res) => {
+  try {
+    const { branch } = req.query;
+
+    let query = `
+      SELECT 
+        id,
+        branch,
+        "capsuleType",
+        date,
+        time,
+        duration,
+        "createdAt",
+        name,
+        phone,
+        email,
+        price,
+        payment_status
+      FROM bookings
+    `;
+
+    const params = [];
+
+    if (branch && branch !== "all") {
+      query += ` WHERE branch=$1`;
+      params.push(branch);
+    }
+
+    query += ` ORDER BY date DESC, time DESC`;
+
+    const result = await pool.query(query, params);
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error("CAPSULE ADMIN GET BOOKINGS ERROR:", err);
+    res.status(500).json({ error: "DB error" });
+  }
+});
+
+app.get("/api/capsule-admin/bookings/:id", async (req, res) => {
+  try {
+    const result = await pool.query(
+      `
+        SELECT 
+          id,
+          branch,
+          "capsuleType",
+          date,
+          time,
+          duration,
+          "createdAt",
+          name,
+          phone,
+          email,
+          price,
+          payment_status
+        FROM bookings
+        WHERE id=$1
+      `,
+      [req.params.id],
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: "Booking not found" });
+    }
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error("CAPSULE ADMIN GET BOOKING ERROR:", err);
+    res.status(500).json({ error: "DB error" });
+  }
+});
+
+app.post("/api/capsule-admin/bookings", async (req, res) => {
+  try {
+    const {
+      branch,
+      capsuleType,
+      date,
+      time,
+      duration,
+      name = "",
+      phone = "",
+      email = "",
+      price = 0,
+      payment_status = "manual",
+    } = req.body;
+
+    if (!branch || !capsuleType || !date || !time || !duration) {
+      return res.status(400).json({
+        error: "branch, capsuleType, date, time, duration are required",
+      });
+    }
+
+    const avail = await checkAvailability({
+      branch,
+      capsuleType,
+      date,
+      time,
+      duration,
+    });
+
+    if (!avail.available) {
+      return res.status(409).json(avail);
+    }
+
+    const id = crypto.randomUUID();
+    const createdAt = new Date().toISOString();
+
+    await pool.query(
+      `
+        INSERT INTO bookings
+        (id, branch, "capsuleType", date, time, duration, "createdAt", name, phone, email, price, payment_status)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+      `,
+      [
+        id,
+        branch,
+        capsuleType,
+        date,
+        time,
+        Number(duration),
+        createdAt,
+        name,
+        phone,
+        email,
+        Number(price || 0),
+        payment_status,
+      ],
+    );
+
+    res.json({ success: true, id });
+  } catch (err) {
+    console.error("CAPSULE ADMIN CREATE BOOKING ERROR:", err);
+    res.status(500).json({ error: "Create failed" });
+  }
+});
+
+app.delete("/api/capsule-admin/bookings/:id", async (req, res) => {
+  try {
+    await pool.query(`DELETE FROM bookings WHERE id=$1`, [req.params.id]);
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error("CAPSULE ADMIN DELETE BOOKING ERROR:", err);
     res.status(500).json({ error: "Delete failed" });
   }
 });
@@ -949,7 +1117,9 @@ app.post("/notify/booking", async (req, res) => {
   try {
     const { booking } = req.body;
 
-    const chatId = getTelegramChatIdForBranch(booking.branch || booking.locationLabel);
+    const chatId = getTelegramChatIdForBranch(
+      booking.branch || booking.locationLabel,
+    );
 
     const text = `📢 Yangi bron qabul qilindi
 

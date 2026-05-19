@@ -14,9 +14,10 @@ import Contact from "./pages/contact/Contact";
 import MyBooking from "./pages/mybooking/MyBooking";
 import Login from "./pages/admin/login/Login";
 import Data from "./pages/admin/data/Data";
+import CapsuleAdmin from "./pages/admin1/CapsuleAdmin";
+import CapsuleAdminLogin from "./pages/admin1/CapsuleAdminLogin";
 
 import PaymentSuccess from "./pages/payment/PaymentSuccess";
-
 
 function App() {
   return (
@@ -55,7 +56,8 @@ function App() {
         <Route path="data1212" element={<Data />} />
 
         <Route path="/success" element={<PaymentSuccess />} />
-
+        <Route path="/admin033" element={<CapsuleAdmin />} />
+        <Route path="/admin/login" element={<CapsuleAdminLogin />} />
       </Routes>
 
       <Footer />

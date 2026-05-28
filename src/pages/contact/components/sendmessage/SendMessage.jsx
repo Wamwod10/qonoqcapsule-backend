@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+﻿import React, { useEffect, useRef, useState } from "react";
 import "./sendmessage.scss";
 import { LuSend } from "react-icons/lu";
 import { FaChevronDown } from "react-icons/fa";
@@ -7,6 +7,65 @@ import { BRANCH_ORDER } from "../../../../data/bookingConfig";
 
 const API_URL =
   import.meta.env.VITE_API_URL || "https://qonoqcapsule-backend.onrender.com";
+
+const CustomSelect = ({ label, name, value, placeholder, options, onChange }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const selectRef = useRef(null);
+  const selectedOption = options.find((option) => option.value === value);
+
+  useEffect(() => {
+    const closeSelect = (event) => {
+      if (!selectRef.current?.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", closeSelect);
+    return () => document.removeEventListener("mousedown", closeSelect);
+  }, []);
+
+  const handleSelect = (nextValue) => {
+    onChange({ target: { name, value: nextValue } });
+    setIsOpen(false);
+  };
+
+  return (
+    <div className="sendmessage__form-group" ref={selectRef}>
+      <label>{label}</label>
+      <button
+        type="button"
+        className={`sendmessage__select-trigger${value ? "" : " is-placeholder"}${
+          isOpen ? " is-open" : ""
+        }`}
+        aria-expanded={isOpen}
+        aria-haspopup="listbox"
+        onClick={() => setIsOpen((current) => !current)}
+      >
+        <span>{selectedOption?.label || placeholder}</span>
+        <FaChevronDown className="sendmessage__select-icon" />
+      </button>
+
+      {isOpen && (
+        <div className="sendmessage__select-menu" role="listbox">
+          {options.map((option) => (
+            <button
+              type="button"
+              className={`sendmessage__select-option${
+                option.value === value ? " is-selected" : ""
+              }`}
+              key={option.value}
+              role="option"
+              aria-selected={option.value === value}
+              onClick={() => handleSelect(option.value)}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
 
 const SendMessage = () => {
   const { t } = useTranslation();
@@ -19,6 +78,19 @@ const SendMessage = () => {
     method: "",
     message: "",
   });
+
+  const branchOptions = BRANCH_ORDER.map((branch) => ({
+    value: branch.key,
+    label: t(branch.labelKey, {
+      defaultValue: branch.fallbackLabel,
+    }),
+  }));
+
+  const methodOptions = [
+    { value: "telegram", label: t("send_method_telegram") },
+    { value: "email", label: t("send_method_email") },
+    { value: "whatsapp", label: t("send_method_whatsapp") },
+  ];
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -132,47 +204,23 @@ const SendMessage = () => {
                 />
               </div>
 
-              <div className="sendmessage__form-group">
-                <label>{t("send_branch")}</label>
-                <select
-                  className="sendmessage__branch"
-                  name="branch"
-                  value={formData.branch}
-                  onChange={handleChange}
-                  required
-                >
-                  <option value="" disabled>
-                    {t("send_branch_placeholder")}
-                  </option>
-                  {BRANCH_ORDER.map((branch) => (
-                    <option value={branch.key} key={branch.key}>
-                      {t(branch.labelKey, {
-                        defaultValue: branch.fallbackLabel,
-                      })}
-                    </option>
-                  ))}
-                </select>
-                <FaChevronDown className="select-icon" />
-              </div>
+              <CustomSelect
+                label={t("send_branch")}
+                name="branch"
+                value={formData.branch}
+                placeholder={t("send_branch_placeholder")}
+                options={branchOptions}
+                onChange={handleChange}
+              />
 
-              <div className="sendmessage__form-group">
-                <label>{t("send_method")}</label>
-                <select
-                  className="sendmessage__methods"
-                  name="method"
-                  value={formData.method}
-                  onChange={handleChange}
-                  required
-                >
-                  <option value="" disabled>
-                    {t("send_method_placeholder")}
-                  </option>
-                  <option value="telegram">{t("send_method_telegram")}</option>
-                  <option value="email">{t("send_method_email")}</option>
-                  <option value="whatsapp">{t("send_method_whatsapp")}</option>
-                </select>
-                <FaChevronDown className="select-icon" />
-              </div>
+              <CustomSelect
+                label={t("send_method")}
+                name="method"
+                value={formData.method}
+                placeholder={t("send_method_placeholder")}
+                options={methodOptions}
+                onChange={handleChange}
+              />
             </div>
 
             <div className="sendmessage__form">

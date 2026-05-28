@@ -1,4 +1,4 @@
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+﻿const API_URL = import.meta.env.VITE_API_URL || "https://qonoqcapsule-backend.onrender.com";
 
 const readErrorMessage = async (res, fallback) => {
   const data = await res.json().catch(() => null);
@@ -63,3 +63,4 @@ export async function deleteCapsuleAdminBooking(id) {
 
   return res.json();
 }
+

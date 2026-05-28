@@ -8,7 +8,14 @@ import { BRANCH_ORDER } from "../../../../data/bookingConfig";
 const API_URL =
   import.meta.env.VITE_API_URL || "https://qonoqcapsule-backend.onrender.com";
 
-const CustomSelect = ({ label, name, value, placeholder, options, onChange }) => {
+const CustomSelect = ({
+  label,
+  name,
+  value,
+  placeholder,
+  options,
+  onChange,
+}) => {
   const [isOpen, setIsOpen] = useState(false);
   const selectRef = useRef(null);
   const selectedOption = options.find((option) => option.value === value);
@@ -192,18 +199,6 @@ const SendMessage = () => {
                 />
               </div>
 
-              <div className="sendmessage__form-group">
-                <label>{t("send_phone")}</label>
-                <input
-                  type="tel"
-                  name="phone"
-                  value={formData.phone}
-                  onChange={handleChange}
-                  placeholder={t("send_phone_placeholder")}
-                  required
-                />
-              </div>
-
               <CustomSelect
                 label={t("send_branch")}
                 name="branch"
@@ -221,6 +216,18 @@ const SendMessage = () => {
                 options={methodOptions}
                 onChange={handleChange}
               />
+
+              <div className="sendmessage__form-group">
+                <label>{t("send_phone")}</label>
+                <input
+                  type="tel"
+                  name="phone"
+                  value={formData.phone}
+                  onChange={handleChange}
+                  placeholder={t("send_phone_placeholder")}
+                  required
+                />
+              </div>
             </div>
 
             <div className="sendmessage__form">

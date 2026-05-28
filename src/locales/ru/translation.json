@@ -278,12 +278,14 @@
   "send_full_name": "Полное имя",
   "send_email": "Электронная почта",
   "send_phone": "Номер телефона",
+  "send_branch": "Филиал",
   "send_method": "Предпочтительный способ связи",
   "send_message_label": "Сообщение",
 
   "send_full_name_placeholder": "Иван Иванов",
   "send_email_placeholder": "ivan@example.com",
   "send_phone_placeholder": "Номер телефона",
+  "send_branch_placeholder": "Выберите филиал",
   "send_method_placeholder": "Выберите способ связи",
   "send_message_placeholder": "Пожалуйста, подробно опишите ваш запрос...",
 
@@ -292,6 +294,7 @@
   "send_method_whatsapp": "WhatsApp",
 
   "send_button": "Отправить сообщение",
+  "send_error": "Что-то пошло не так. Пожалуйста, попробуйте снова.",
 
   "mybooking_title": "Мои бронирования",
   "mybooking_empty": "Бронирований пока нет",

@@ -136,6 +136,7 @@
   .sendmessage__form-group {
     position: relative;
 
+    .sendmessage__branch,
     .sendmessage__methods {
       background: #0b0b0b;
 
@@ -148,6 +149,7 @@
 
   }
 
+  .sendmessage__branch option[value=""],
   .sendmessage__methods option[value=""] {
     color: #9ca3af;
     cursor: pointer;

@@ -292,12 +292,14 @@
   "send_full_name": "Full Name",
   "send_email": "Email Address",
   "send_phone": "Phone Number",
+  "send_branch": "Branch",
   "send_method": "Preferred Contact Method",
   "send_message_label": "Message",
 
   "send_full_name_placeholder": "John Doe",
   "send_email_placeholder": "john@example.com",
   "send_phone_placeholder": "Phone Number",
+  "send_branch_placeholder": "Select a branch",
   "send_method_placeholder": "Select a contact method",
   "send_message_placeholder": "Please describe your inquiry in detail...",
 
@@ -306,6 +308,7 @@
   "send_method_whatsapp": "WhatsApp",
 
   "send_button": "Send Message",
+  "send_error": "Something went wrong. Please try again.",
 
   "mybooking_title": "My Bookings",
   "mybooking_empty": "No bookings yet",

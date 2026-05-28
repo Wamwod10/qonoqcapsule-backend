@@ -63,6 +63,75 @@ const getTelegramChatIdForBranch = (branch) => {
   return TELEGRAM_CHAT_IDS[mappedKey] || process.env.CHAT_ID;
 };
 
+const getTelegramContactChatIdForBranch = (branch) => {
+  const normalizedBranch = normalizeTelegramBranch(branch);
+  const branchKeyMap = {
+    airport: "airport",
+    tas: "airport",
+    tashkent: "airport",
+    tashkent_airport: "airport",
+    toshkent_aeroporti: "airport",
+    toshkent_xalqaro_aeroporti: "airport",
+    samarkand_airport: "city",
+    samarqand_aeroporti: "city",
+    samarqand_xalqaro_aeroporti: "city",
+    sam_air: "city",
+    city: "city",
+    buh: "city",
+    samarkand_railway: "north",
+    samarkand_railway_station: "north",
+    samarqand_temir_yo_l_vokzali: "north",
+    samarqand_temir_yol_vokzali: "north",
+    sam_rail: "north",
+    sam: "north",
+    north: "north",
+  };
+
+  const mappedKey = branchKeyMap[normalizedBranch] || normalizedBranch;
+  return TELEGRAM_CHAT_IDS[mappedKey];
+};
+
+const inferTelegramBranchFromText = (text) => {
+  const value = String(text || "").toLowerCase();
+
+  if (value.includes("railway") || value.includes("temir") || value.includes("vokzal")) {
+    return "samarkand_railway";
+  }
+
+  if (value.includes("samarkand airport") || value.includes("samarqand aeroport")) {
+    return "samarkand_airport";
+  }
+
+  if (value.includes("tashkent") || value.includes("toshkent")) {
+    return "tashkent_airport";
+  }
+
+  return "";
+};
+
+const getTelegramContactBranch = (body) =>
+  body.branch ||
+  body.branchKey ||
+  body.location ||
+  body.locationLabel ||
+  inferTelegramBranchFromText(body.text);
+
+const buildTelegramContactText = (body) => {
+  if (!body.fullName && !body.email && !body.phone && !body.message) {
+    return body.text || "";
+  }
+
+  const branchLabel = getTelegramBranchLabel(body.branch || body.branchLabel);
+
+  return `📩 Yangi xabar:
+👤 Ism: ${body.fullName || ""}
+📧 Email: ${body.email || ""}
+📞 Telefon: ${body.phone || ""}
+📍 Filial: ${branchLabel}
+💬 Aloqa usuli: ${body.method || ""}
+📝 Xabar: ${body.message || ""}`;
+};
+
 const getTelegramBranchLabel = (branch) => {
   const normalizedBranch = normalizeTelegramBranch(branch);
   const branchLabelMap = {
@@ -1098,14 +1167,35 @@ app.get("/api/payment-status/:orderId", async (req, res) => {
 
 app.post("/notify/telegram", async (req, res) => {
   try {
+    const branch = getTelegramContactBranch(req.body);
+    const chatId = getTelegramContactChatIdForBranch(branch);
+    const text = buildTelegramContactText(req.body);
+
+    if (!chatId) {
+      return res.status(400).json({
+        success: false,
+        error: "Valid branch is required",
+      });
+    }
+
+    if (!text.trim()) {
+      return res.status(400).json({
+        success: false,
+        error: "Message text is required",
+      });
+    }
+
     const url = `https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`;
 
-    await axios.post(url, {
-      chat_id: process.env.CHAT_ID,
-      text: req.body.text,
+    const telegramResponse = await axios.post(url, {
+      chat_id: chatId,
+      text,
     });
 
-    res.json({ success: true });
+    res.json({
+      success: true,
+      message_id: telegramResponse.data?.result?.message_id,
+    });
   } catch (error) {
     console.log("TELEGRAM ERROR:", error.response?.data || error.message);
     res.status(500).json({ success: false });

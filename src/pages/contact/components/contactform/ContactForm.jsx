@@ -1,15 +1,63 @@
-import React from "react";
-import { FaLocationArrow, FaUtensils, FaTaxi } from "react-icons/fa6";
-import { GiShoppingBag } from "react-icons/gi";
+import React, { useEffect, useState } from "react";
+import { FaLocationArrow, FaMoneyBillWave } from "react-icons/fa6";
 import { LuExternalLink } from "react-icons/lu";
-import { MdMarkEmailRead } from "react-icons/md";
+import { AiOutlineClose } from "react-icons/ai";
+import { IoLocationOutline } from "react-icons/io5";
+import { MdAccountBalance, MdAirplaneTicket, MdCurrencyExchange } from "react-icons/md";
 import { useTranslation } from "react-i18next";
 import "./contactform.scss";
 
 const ContactForm = () => {
   const { t } = useTranslation();
+  const [isDirectionsModalOpen, setIsDirectionsModalOpen] = useState(false);
+
+  const directionsLocations = [
+    {
+      title: t("contact_branch_tashkent_airport"),
+      subtitle: t("contact_branch_tashkent_airport_address"),
+      link: "https://maps.google.com/?q=Tashkent+International+Airport+Departure+Area+2nd+Floor",
+    },
+    {
+      title: t("contact_branch_samarkand_airport"),
+      subtitle: t("contact_branch_samarkand_airport_address"),
+      link: "https://maps.google.com/?q=Samarkand+International+Airport",
+    },
+    {
+      title: t("contact_branch_samarkand_railway"),
+      subtitle: t("contact_branch_samarkand_railway_address"),
+      link: "https://maps.google.com/?q=Samarkand+Railway+Station",
+    },
+  ];
+
+  const openDirectionsModal = () => {
+    setIsDirectionsModalOpen(true);
+    document.body.style.overflow = "hidden";
+  };
+
+  const closeDirectionsModal = () => {
+    setIsDirectionsModalOpen(false);
+    document.body.style.overflow = "unset";
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") {
+        closeDirectionsModal();
+      }
+    };
+
+    if (isDirectionsModalOpen) {
+      window.addEventListener("keydown", handleKeyDown);
+    }
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = "unset";
+    };
+  }, [isDirectionsModalOpen]);
 
   return (
+    <>
     <div className="contactform">
       <div className="container">
         <div className="contactform__box">
@@ -17,22 +65,21 @@ const ContactForm = () => {
             <h2 className="contactform__title">
               {t("contact_location_title")}
             </h2>
-            <a
-              href="https://www.google.com/maps/place/Khamsa+hotel+taschkent+airoport/@41.2620646,69.2675622,3a,75y,322.94h,76.57t/data=!3m8!1e1!3m6!1sCIHM0ogKEICAgIDav4jwIg!2e10!3e11!6shttps:%2F%2Flh3.googleusercontent.com%2Fgpms-cs-s%2FAB8u6HYzQPpOSG5huCCz7Pn98iBi3z0mgak7rmiWPbsQBwEQRqXBcFXV9zlFw5nnvhz7VPKQld_qPqArkncvTR7YJsXbiE7cKWuNnFIiIkp5tst7bxoED9XGqSjQ7EjOcgK-75l0YLM%3Dw900-h600-k-no-pi13.430341118955397-ya183.93791184466573-ro0-fo100!7i11264!8i5632!4m20!1m10!3m9!1s0x38ae61007cb3de3b:0x62705b2323c597e!2sKhamsa+hotel+taschkent+airoport!5m2!4m1!1i2!8m2!3d41.261939!4d69.2674976!16s%2Fg%2F11whhjjr13!3m8!1s0x38ae61007cb3de3b:0x62705b2323c597e!5m2!4m1!1i2!8m2!3d41.261939!4d69.2674976!16s%2Fg%2F11whhjjr13?entry=ttu&g_ep=EgoyMDI1MDgxNy4wIKXMDSoASAFQAw%3D%3D"
+            <button
+              type="button"
               className="contactform__link"
+              onClick={openDirectionsModal}
             >
               <FaLocationArrow /> {t("contact_get_directions")}
-            </a>
+            </button>
           </div>
 
           <div className="contactform__map-box">
-            <iframe
+            <img
               className="contactform__map"
-              src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3721.6087235148198!2d69.26492267656143!3d41.261943003766085!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x38ae61007cb3de3b%3A0x62705b2323c597e!2sKhamsa%20hotel%20taschkent%20airoport!5e1!3m2!1sru!2s!4v1755668900789!5m2!1sru!2s"
-              allowFullScreen=""
-              loading="lazy"
-              referrerPolicy="no-referrer-when-downgrade"
-            ></iframe>
+              src="/12.jpg"
+              alt={t("contact_hotel_name")}
+            />
 
             <div className="contactform__map-div">
               <h3 className="contactform__map-title">
@@ -53,7 +100,7 @@ const ContactForm = () => {
               <div className="contactform__nears-div">
                 <div className="contactform__titles-div">
                   <div className="contactform__nears-icon">
-                    <GiShoppingBag className="icon icon-rotate" />
+                    <MdCurrencyExchange className="icon icon-rotate" />
                   </div>
                   <div>
                     <h3 className="contactform__div-title">
@@ -73,7 +120,7 @@ const ContactForm = () => {
               <div className="contactform__nears-div">
                 <div className="contactform__titles-div">
                   <div className="contactform__nears-icon">
-                    <FaUtensils className="icon icon-rotate" />
+                    <MdAccountBalance className="icon icon-rotate" />
                   </div>
                   <div>
                     <h3 className="contactform__div-title">
@@ -93,7 +140,7 @@ const ContactForm = () => {
               <div className="contactform__nears-div">
                 <div className="contactform__titles-div">
                   <div className="contactform__nears-icon">
-                    <MdMarkEmailRead className="icon icon-rotate" />
+                    <MdAirplaneTicket className="icon icon-rotate" />
                   </div>
                   <div>
                     <h3 className="contactform__div-title">
@@ -113,7 +160,7 @@ const ContactForm = () => {
               <div className="contactform__nears-div">
                 <div className="contactform__titles-div">
                   <div className="contactform__nears-icon">
-                    <FaTaxi className="icon icon-rotate" />
+                    <FaMoneyBillWave className="icon icon-rotate" />
                   </div>
                   <div>
                     <h3 className="contactform__div-title">
@@ -134,6 +181,64 @@ const ContactForm = () => {
         </div>
       </div>
     </div>
+    {isDirectionsModalOpen && (
+      <div className="contact-modal-overlay" onClick={closeDirectionsModal}>
+        <div className="contact-modal" onClick={(e) => e.stopPropagation()}>
+          <div className="contact-modal__top">
+            <div className="contact-modal__heading">
+              <div className="contact-modal__heading-icon">
+                <FaLocationArrow />
+              </div>
+              <div>
+                <h3 className="contact-modal__title">
+                  {t("contact_directions_modal_title")}
+                </h3>
+                <p className="contact-modal__subtitle">
+                  {t("contact_directions_modal_subtitle")}
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              className="contact-modal__close"
+              onClick={closeDirectionsModal}
+              aria-label="Close modal"
+            >
+              <AiOutlineClose />
+            </button>
+          </div>
+
+          <div className="contact-modal__list">
+            {directionsLocations.map((item, index) => (
+              <div className="contact-modal__item" key={index}>
+                <div className="contact-modal__item-left">
+                  <div className="contact-modal__item-icon">
+                    <IoLocationOutline />
+                  </div>
+
+                  <div className="contact-modal__item-text">
+                    <h4>{item.title}</h4>
+                    <p>{item.subtitle}</p>
+                  </div>
+                </div>
+
+                <a
+                  href={item.link}
+                  className="contact-modal__call-btn"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  <FaLocationArrow />
+                  <span>{t("contact_modal_open_map")}</span>
+                </a>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 };
 

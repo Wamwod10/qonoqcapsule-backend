@@ -1,7 +1,20 @@
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useTranslation, Trans } from "react-i18next";
 import { useNavigate } from "react-router-dom";
+import {
+  buildBookingState,
+  DURATION_HOURS,
+  getAvailableCapsuleTypes,
+  getBranchConfig,
+  getCapsuleTypeConfig,
+  getDefaultCapsuleType,
+  isCapsuleTypeAvailable,
+} from "../../data/bookingConfig";
 import "./header.scss";
+
+const API_BASE = "https://qonoqcapsule-backend.onrender.com";
+const AVAILABILITY_URL = `${API_BASE}/api/check-availability`;
+const REQUEST_TIMEOUT_MS = 12000;
 
 const Header = () => {
   const { t } = useTranslation();
@@ -9,13 +22,41 @@ const Header = () => {
 
   const [checkIn, setCheckIn] = useState("");
   const [checkInTime, setCheckInTime] = useState("");
+  const [locationValue, setLocationValue] = useState("tashkent_airport");
   const [capsuleType, setCapsuleType] = useState("standard");
   const [duration, setDuration] = useState("4h");
-  const [locationValue, setLocationValue] = useState("tas");
 
   const [busyTime, setBusyTime] = useState(null);
+  const [submitError, setSubmitError] = useState("");
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
+
+  const branchConfig = useMemo(
+    () => getBranchConfig(locationValue),
+    [locationValue],
+  );
+  const capsuleOptions = useMemo(
+    () => getAvailableCapsuleTypes(branchConfig.key),
+    [branchConfig.key],
+  );
+
+  useEffect(() => {
+    if (!isCapsuleTypeAvailable(branchConfig.key, capsuleType)) {
+      setCapsuleType(getDefaultCapsuleType(branchConfig.key));
+    }
+  }, [branchConfig.key, capsuleType]);
+
+  useEffect(() => {
+    const timerId = window.setTimeout(() => {
+      fetch(API_BASE, {
+        method: "GET",
+        mode: "no-cors",
+        cache: "no-store",
+      }).catch(() => {});
+    }, 800);
+
+    return () => window.clearTimeout(timerId);
+  }, []);
 
   /* ================= VALIDATION ================= */
 
@@ -39,91 +80,115 @@ const Header = () => {
 
   /* ================= SUBMIT ================= */
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!validate()) return;
+  const fetchAvailability = async (payload) => {
+    let lastError = null;
 
-    setBusyTime(null);
-    setLoading(true);
-
-    const durationMap = { "4h": 4, "6h": 6, "10h": 10 };
-
-    const branch =
-      locationValue === "tas"
-        ? "airport"
-        : locationValue === "buh"
-          ? "city"
-          : "north";
-
-    let available = false;
-
-    try {
-      const res = await fetch(
-        "https://qonoqcapsule-backend.onrender.com/api/check-availability",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            branch,
-            capsuleType,
-            date: checkIn,
-            time: checkInTime,
-            duration: durationMap[duration],
-          }),
-        },
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const controller = new AbortController();
+      const timeoutId = window.setTimeout(
+        () => controller.abort(),
+        REQUEST_TIMEOUT_MS,
       );
 
-      const data = await res.json();
-
-      if (data.available === true) {
-        available = true;
-      } else {
-        setBusyTime({
-          time: data.nextTime,
-          nextDay: data.nextDay,
+      try {
+        const response = await fetch(AVAILABILITY_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          signal: controller.signal,
         });
+
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+          throw new Error(data?.error || "Availability request failed");
+        }
+
+        return data;
+      } catch (error) {
+        lastError = error;
+
+        if (attempt === 0) {
+          await fetch(API_BASE, {
+            method: "GET",
+            mode: "no-cors",
+            cache: "no-store",
+          }).catch(() => {});
+        }
+      } finally {
+        window.clearTimeout(timeoutId);
       }
-    } catch (err) {
-      alert("Server error. Try again.");
+    }
+
+    throw lastError;
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!validate() || loading) return;
+
+    const capsuleConfig = getCapsuleTypeConfig(capsuleType);
+
+    setBusyTime(null);
+    setSubmitError("");
+    setLoading(true);
+
+    try {
+      const data = await fetchAvailability({
+        branch: branchConfig.backendBranch,
+        capsuleType: capsuleConfig.backendType,
+        date: checkIn,
+        time: checkInTime,
+        duration: DURATION_HOURS[duration],
+      });
+
+      if (data.available !== true) {
+        setBusyTime({
+          time: data?.nextTime || "",
+          nextDay: Boolean(data?.nextDay),
+        });
+        setLoading(false);
+        return;
+      }
+    } catch (error) {
+      const message =
+        error?.name === "AbortError"
+          ? t("availability_timeout", {
+              defaultValue:
+                "The server is responding slowly. Please try again in a few seconds.",
+            })
+          : t("availability_error", {
+              defaultValue:
+                "We could not check availability right now. Please try again.",
+            });
+
+      setSubmitError(message);
       setLoading(false);
       return;
     }
 
-    if (!available) {
+    if (!branchConfig) {
       setLoading(false);
       return; // ❗ bu yerda QATTIQ to‘xtaydi
     }
 
     /* ===== faqat available bo‘lsa pastga tushadi ===== */
 
-    const bookingState = {
+    const bookingState = buildBookingState({
+      branchInput: branchConfig.key,
+      capsuleTypeKey: capsuleType,
       checkIn,
       checkInTime,
       durationValue: duration,
-      capsuleTypeValue: capsuleType,
-      locationValue,
-
-      durationLabel: t(`duration_${duration}`, { defaultValue: duration }),
-      capsuleTypeLabel:
-        capsuleType === "standard"
-          ? t("capsule_standard")
-          : t("capsule_family"),
-      locationLabel:
-        locationValue === "tas"
-          ? t("loc_tas")
-          : locationValue === "buh"
-            ? t("loc_buh")
-            : t("loc_ind"),
-
-      createdAt: new Date().toISOString(),
-    };
+      t,
+    });
 
     try {
       sessionStorage.setItem("qonoq_booking", JSON.stringify(bookingState));
     } catch {}
 
     setLoading(false);
-    navigate("/capsule", { state: bookingState });
+    navigate(branchConfig.path, { state: bookingState });
   };
 
   return (
@@ -143,10 +208,10 @@ const Header = () => {
             <p className="header__text">{t("hero_subtitle")}</p>
 
             <div className="header__box-link">
-              <a href="/capsules" className="header__link">
+              <a href="/capsule" className="header__link">
                 {t("cta_see_capsules")}
               </a>
-              <a href="/capsules" className="header__link">
+              <a href="/capsule" className="header__link">
                 {t("cta_book_now")}
               </a>
             </div>
@@ -199,6 +264,33 @@ const Header = () => {
 
               <div className="header__form-box">
                 <label className="header__form-title">
+                  {t("select_location")}
+                </label>
+                <select
+                  className="header__form-input header__select"
+                  value={locationValue}
+                  onChange={(e) => setLocationValue(e.target.value)}
+                >
+                  <option value="tashkent_airport">
+                    {t("branch_tashkent_airport", {
+                      defaultValue: "Tashkent Airport",
+                    })}
+                  </option>
+                  <option value="samarkand_airport">
+                    {t("branch_samarkand_airport", {
+                      defaultValue: "Samarkand Airport",
+                    })}
+                  </option>
+                  <option value="samarkand_railway">
+                    {t("branch_samarkand_railway", {
+                      defaultValue: "Samarkand Railway",
+                    })}
+                  </option>
+                </select>
+              </div>
+
+              <div className="header__form-box">
+                <label className="header__form-title">
                   {t("capsules_label")}
                 </label>
                 <select
@@ -206,8 +298,13 @@ const Header = () => {
                   value={capsuleType}
                   onChange={(e) => setCapsuleType(e.target.value)}
                 >
-                  <option value="standard">{t("capsule_standard")}</option>
-                  <option value="family">{t("capsule_family")}</option>
+                  {capsuleOptions.map((option) => (
+                    <option key={option.key} value={option.key}>
+                      {t(option.labelKey, {
+                        defaultValue: option.fallbackLabel,
+                      })}
+                    </option>
+                  ))}
                 </select>
               </div>
 
@@ -220,24 +317,11 @@ const Header = () => {
                   value={duration}
                   onChange={(e) => setDuration(e.target.value)}
                 >
+                  <option value="2h">{t("duration_2h")}</option>
                   <option value="4h">{t("duration_4h")}</option>
                   <option value="6h">{t("duration_6h")}</option>
                   <option value="10h">{t("duration_10h")}</option>
-                </select>
-              </div>
-
-              <div className="header__form-box">
-                <label className="header__form-title">
-                  {t("select_location")}
-                </label>
-                <select
-                  className="header__form-input header__select"
-                  value={locationValue}
-                  onChange={(e) => setLocationValue(e.target.value)}
-                >
-                  <option value="tas">{t("loc_tas")}</option>
-                  <option value="buh">{t("loc_buh")}</option>
-                  <option value="ind">{t("loc_ind")}</option>
+                  <option value="1d">{t("duration_1d")}</option>
                 </select>
               </div>
 
@@ -246,7 +330,7 @@ const Header = () => {
                 <div className="availability-modal">
                   <div className="availability-modal__box">
                     <p className="availability__modal-text">
-                      Capsule is busy! Next available time: 
+                      Capsule is busy! Next available time:
                       {/* <br /> */}
                       <b>
                         {busyTime.time}
@@ -264,6 +348,8 @@ const Header = () => {
                   </div>
                 </div>
               )}
+
+              {submitError && <small className="form-error">{submitError}</small>}
 
               <div className="header__link-box">
                 <button

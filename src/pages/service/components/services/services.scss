@@ -126,6 +126,11 @@
 }
 
 @media (max-width: 768px) {
+  .services {
+    padding: 0px;
+    overflow-x: hidden !important;
+  }
+
   .services__header h2 {
     font-size: 40px !important;
   }

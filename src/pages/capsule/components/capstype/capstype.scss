@@ -9,7 +9,8 @@
   }
 
   &__card {
-    background: radial-gradient(
+    background:
+      radial-gradient(
         300px 150px at 0% 5%,
         rgba(255, 255, 255, 0.08),
         transparent 60%
@@ -22,7 +23,8 @@
       rgba(16, 16, 16, 0.55);
     backdrop-filter: saturate(170%) blur(14px);
     -webkit-backdrop-filter: saturate(170%) blur(14px);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.06),
       0 8px 26px rgba(0, 0, 0, 0.28);
     overflow: hidden;
     border-radius: 40px;
@@ -37,14 +39,14 @@
 
   &__img {
     width: 530px;
-    height: 375px;
+    height: 390px;
     border-radius: 25px;
     position: relative;
   }
 
   &__title {
     font-size: 27px !important;
-    padding-top: 10px;
+    // padding-top: 10px;
     margin-bottom: 10px;
     font-weight: 600;
   }
@@ -53,23 +55,25 @@
     font-size: 18px;
     padding: 8px 20px;
     border-radius: 999px;
-    color: #ffffff;
+    color: #146eff;
     white-space: nowrap;
     cursor: pointer;
     background: rgba(20, 20, 20, 0.35);
     backdrop-filter: blur(2px) saturate(200%);
     -webkit-backdrop-filter: blur(14px) saturate(150%);
-    box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.25),
+    box-shadow:
+      inset 0 1px 2px rgba(255, 255, 255, 0.25),
       inset 0 -2px 3px rgba(0, 0, 0, 0.4);
     transition: all 0.25s ease;
   }
 
   &__prices {
-    display: flex;
-    position: absolute;
-    flex-direction: column;
-    row-gap: 10px;
+    display: inline-flex;
+    max-width: 800px;
+    flex-wrap: wrap;
+    gap: 10px;
     padding: 10px;
+    padding-left: 0;
   }
 
   &__location {
@@ -90,7 +94,7 @@
   }
 
   &__link-div {
-    margin-top: 50px;
+    margin-top: 15px;
   }
 
   &__link {
@@ -101,6 +105,32 @@
     opacity: 0.4;
     cursor: not-allowed;
     pointer-events: none;
+  }
+
+  .capstype__thumbs {
+    display: flex;
+    gap: 15px;
+    margin-top: 20px;
+  }
+
+  .capstype__thumb {
+    width: 120px;
+    height: 100px;
+    object-fit: cover;
+    border-radius: 12px;
+    cursor: pointer;
+    opacity: 0.6;
+    transition: all 0.2s ease;
+    border: 2px solid transparent;
+  }
+
+  .capstype__thumb:hover {
+    opacity: 1;
+  }
+
+  .capstype__thumb.active {
+    opacity: 1;
+    border-color: #146eff;
   }
 }
 

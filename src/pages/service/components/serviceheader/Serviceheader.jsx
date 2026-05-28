@@ -19,10 +19,10 @@ const Serviceheader = () => {
             <p className="serviceheader__text2">{t("service_header_text2")}</p>
 
             <div className="serviceheader__big-links">
-              <a href="#!" className="qonoq__big-link">
+              <a href="/" className="qonoq__big-link">
                 {t("service_header_booking")}
               </a>
-              <a href="#!" className="qonoq__big-link">
+              <a href="tel:+998952322424" className="qonoq__big-link">
                 {t("service_header_contact")}
               </a>
             </div>

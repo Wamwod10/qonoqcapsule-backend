@@ -4,7 +4,8 @@
   &__box {
     width: 835px;
     height: fit-content;
-    background: radial-gradient(
+    background:
+      radial-gradient(
         300px 150px at 0% 5%,
         rgba(255, 255, 255, 0.08),
         transparent 60%
@@ -17,7 +18,8 @@
       rgba(16, 16, 16, 0.55);
     backdrop-filter: saturate(170%) blur(14px);
     -webkit-backdrop-filter: saturate(170%) blur(14px);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.06),
       0 8px 26px rgba(0, 0, 0, 0.28);
     border: 1px solid #cccccc87;
     border-radius: 20px;
@@ -29,11 +31,8 @@
 
   &__title {
     color: transparent;
-    background: linear-gradient(
-        180deg,
-        rgb(47, 134, 255),
-        rgba(47, 134, 255, 0.417)
-      ),
+    background:
+      linear-gradient(180deg, rgb(47, 134, 255), rgba(47, 134, 255, 0.417)),
       rgba(255, 255, 255, 0.202);
     background-clip: text;
     font-size: 26px !important;
@@ -73,13 +72,14 @@
     }
 
     input {
-      width: 370px;
+      width: 370px !important;
       height: 40px;
       padding: 8px 12px;
       background: rgba(20, 20, 20, 0.35);
       backdrop-filter: blur(14px) saturate(150%);
       -webkit-backdrop-filter: blur(14px) saturate(150%);
-      box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.54),
+      box-shadow:
+        inset 0 1px 2px rgba(255, 255, 255, 0.54),
         inset 0 -2px 3px rgba(0, 0, 0, 0.4);
       border-radius: 8px;
       border: none;
@@ -104,7 +104,8 @@
       background: rgba(20, 20, 20, 0.35);
       backdrop-filter: blur(14px) saturate(150%);
       -webkit-backdrop-filter: blur(14px) saturate(150%);
-      box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.54),
+      box-shadow:
+        inset 0 1px 2px rgba(255, 255, 255, 0.54),
         inset 0 -2px 3px rgba(0, 0, 0, 0.4);
       border-radius: 8px;
       border: none;
@@ -132,6 +133,28 @@
     }
   }
 
+  .sendmessage__form-group {
+    position: relative;
+
+    .sendmessage__branch,
+    .sendmessage__methods {
+      background: #0b0b0b;
+
+      option {
+        background-color: #0b0b0b;
+        color: #fff;
+        cursor: pointer;
+      }
+    }
+
+  }
+
+  .sendmessage__branch option[value=""],
+  .sendmessage__methods option[value=""] {
+    color: #9ca3af;
+    cursor: pointer;
+  }
+
   &__form {
     display: flex;
     flex-direction: column;
@@ -150,7 +173,8 @@
       background: rgba(20, 20, 20, 0.35);
       backdrop-filter: blur(14px) saturate(150%);
       -webkit-backdrop-filter: blur(14px) saturate(150%);
-      box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.54),
+      box-shadow:
+        inset 0 1px 2px rgba(255, 255, 255, 0.54),
         inset 0 -2px 3px rgba(0, 0, 0, 0.4);
       border-radius: 8px;
       border: none;
@@ -178,7 +202,8 @@
       background: rgba(20, 20, 20, 0.35);
       backdrop-filter: blur(14px) saturate(150%);
       -webkit-backdrop-filter: blur(14px) saturate(150%);
-      box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.25),
+      box-shadow:
+        inset 0 1px 2px rgba(255, 255, 255, 0.25),
         inset 0 -2px 3px rgba(0, 0, 0, 0.4);
       border: none;
       outline: none;
@@ -190,7 +215,8 @@
       margin-right: -30px;
 
       &:hover {
-        box-shadow: inset 0 1px 2px rgba(88, 88, 88, 0.186),
+        box-shadow:
+          inset 0 1px 2px rgba(88, 88, 88, 0.186),
           inset 0 -2px 3px rgba(0, 0, 0, 0.4);
       }
     }
@@ -223,9 +249,15 @@
         select,
         textarea {
           width: 100% !important;
-          max-width: 100%;
         }
       }
+    }
+
+    .sendmessage__form-group input {
+      max-width: 700px !important;
+      font-size: 17px !important;
+
+      width: 100%;
     }
 
     &__form {
@@ -245,6 +277,15 @@
     &__form-but {
       justify-content: center;
     }
+  }
+}
+
+@media (max-width: 500px) {
+  .sendmessage__form-group input {
+    max-width: 700px !important;
+    font-size: 17px !important;
+
+    width: 100%;
   }
 }
 

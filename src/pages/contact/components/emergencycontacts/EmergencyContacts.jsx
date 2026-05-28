@@ -11,19 +11,19 @@ const EmergencyContacts = () => {
   const phoneNumbers = [
     {
       title: t("emergency_reception"),
-      number: "+998 95 877 24 24",
+      number: "+998 95 232 24 24",
       buttonText: t("emergency_call_now"),
       icon: <IoCall className="emergency__call-icon" />,
     },
     {
       title: t("emergency_reservations"),
-      number: "+998 95 877 24 24",
+      number: "+998 95 662 24 14",
       buttonText: t("emergency_call_now"),
       icon: <IoCallOutline className="emergency__call-icon" />,
     },
     {
       title: t("emergency_whatsapp"),
-      number: "+998 95 877 24 24",
+      number: "+998 95 236 24 14",
       buttonText: t("emergency_call_now"),
       icon: <FaWhatsapp className="emergency__call-icon" />,
     },
@@ -66,7 +66,7 @@ const EmergencyContacts = () => {
           <div className="emergency__text-box">
             <h2 className="emergency__title">{t("emergency_title")}</h2>
             <p className="emergency__text-number">
-              {t("emergency_24_7")} +998 95 877 24 24
+              {t("emergency_24_7")} +998 95 232 24 24
             </p>
           </div>
         </div>

@@ -10,9 +10,13 @@ import {
   MdOutlineLock,
   MdOutlineSanitizer,
   MdOutlineTouchApp,
+  MdSupportAgent,
+  MdVideocam,
   MdVolumeOff,
 } from "react-icons/md";
 import { useTranslation } from "react-i18next";
+import { IoIosTv } from "react-icons/io";
+import { SiRailway } from "react-icons/si";
 
 const Services = () => {
   const { t } = useTranslation();
@@ -49,7 +53,7 @@ const Services = () => {
       tag: t("service_5_tag"),
     },
     {
-      icon: <MdAccessTime />,
+      icon: <MdSupportAgent />,
       title: t("service_6_title"),
       desc: t("service_6_desc"),
       tag: t("service_6_tag"),
@@ -61,7 +65,7 @@ const Services = () => {
       tag: t("service_7_tag"),
     },
     {
-      icon: <MdOutlineSanitizer />,
+      icon: <MdVideocam />,
       title: t("service_8_title"),
       desc: t("service_8_desc"),
       tag: t("service_8_tag"),
@@ -73,11 +77,23 @@ const Services = () => {
       tag: t("service_9_tag"),
     },
     {
+      icon: <IoIosTv />,
+      title: t("service_11_title"),
+      desc: t("service_11_desc"),
+      tag: t("service_11_tag"),
+    },
+    {
       icon: <MdFlightTakeoff />,
       title: t("service_10_title"),
       desc: t("service_10_desc"),
       tag: t("service_10_tag"),
     },
+    {
+      icon: <SiRailway />,
+      title: t("service_12_title"),
+      desc: t("service_12_desc"),
+      tag: t("service_12_tag"),
+    }
   ];
 
   return (

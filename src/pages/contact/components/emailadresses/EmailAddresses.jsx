@@ -12,19 +12,19 @@ const EmailAddresses = () => {
   const emails = [
     {
       title: t("email_general_title"),
-      email: "qonoqhotel@mail.ru",
+      email: "qonoqcapsule@mail.ru",
       buttonText: t("email_button_send"),
       icon: <HiOutlineMail className="email__call-icon" />,
     },
     {
       title: t("email_reservations_title"),
-      email: "qonoqhotel@mail.ru",
+      email: "qonoqsamarkandairport@mail.ru",
       buttonText: t("email_button_send"),
       icon: <BsCalendar3 className="email__call-icon" />,
     },
     {
       title: t("email_support_title"),
-      email: "qonoqhotel@mail.ru",
+      email: "qonoqsamarkandrailway@mail.ru",
       buttonText: t("email_button_send"),
       icon: <BsHeadphones className="email__call-icon" />,
     },

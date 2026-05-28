@@ -7,9 +7,17 @@ const API = "https://qonoqcapsule-backend.onrender.com/api/bookings";
 /* ===== BRANCHES (BACKEND GA MOS) ===== */
 const branches = [
   { id: "airport", name: "Tashkent Airport" },
-  { id: "city", name: "Bukhara" },
-  { id: "north", name: "India" },
+  { id: "city", name: "Samarkand Airport" },
+  { id: "north", name: "Samarkand Railway" },
 ];
+
+/* ===== CAPSULE LABELS ===== */
+const capsuleLabels = {
+  family: "Family Capsule",
+  standard: "Standard Capsule",
+  standard_luxe: "Standard Luxe Capsule",
+  family_luxe: "Family Luxe Capsule",
+};
 
 const Data = () => {
   const [bookings, setBookings] = useState([]);
@@ -51,7 +59,7 @@ const Data = () => {
     }
 
     try {
-      await fetch(API, {
+      const res = await fetch(API, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -63,10 +71,17 @@ const Data = () => {
         }),
       });
 
+      const data = await res.json();
+
+      if (!res.ok) {
+        alert(data.error || "Insert failed");
+        return;
+      }
+
       setForm({ ...form, date: "", time: "" });
       loadBookings();
     } catch (err) {
-      alert("Insert failed");
+      alert("Network error. Backend unreachable.");
     }
   };
 
@@ -76,10 +91,14 @@ const Data = () => {
     if (!window.confirm("Delete this booking?")) return;
 
     try {
-      await fetch(`${API}/${id}`, { method: "DELETE" });
+      const res = await fetch(`${API}/${id}`, { method: "DELETE" });
+      if (!res.ok) {
+        alert("Delete failed");
+        return;
+      }
       loadBookings();
     } catch (err) {
-      alert("Delete failed");
+      alert("Network error");
     }
   };
 
@@ -114,6 +133,8 @@ const Data = () => {
             >
               <option value="family">Family Capsule</option>
               <option value="standard">Standard Capsule</option>
+              <option value="standard_luxe">Standard Luxe Capsule</option>
+              <option value="family_luxe">Family Luxe Capsule</option>
             </select>
           </div>
 
@@ -145,9 +166,11 @@ const Data = () => {
                 setForm({ ...form, duration: Number(e.target.value) })
               }
             >
+              <option value={2}>Up to 2 hours</option>
               <option value={4}>Up to 4 hours</option>
               <option value={6}>Up to 6 hours</option>
               <option value={10}>Up to 10 hours</option>
+              <option value={24}>Up to 24 hours</option>
             </select>
           </div>
 
@@ -175,7 +198,7 @@ const Data = () => {
 
               <div>
                 <span>Capsule</span>
-                <b>{b.capsuleType}</b>
+                <b>{capsuleLabels[b.capsuleType] || b.capsuleType}</b>
               </div>
 
               <div>

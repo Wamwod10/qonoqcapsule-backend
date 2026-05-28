@@ -3,6 +3,10 @@ import "./sendmessage.scss";
 import { LuSend } from "react-icons/lu";
 import { FaChevronDown } from "react-icons/fa";
 import { useTranslation } from "react-i18next";
+import { BRANCH_ORDER } from "../../../../data/bookingConfig";
+
+const API_URL =
+  import.meta.env.VITE_API_URL || "https://qonoqcapsule-backend.onrender.com";
 
 const SendMessage = () => {
   const { t } = useTranslation();
@@ -11,6 +15,7 @@ const SendMessage = () => {
     fullName: "",
     email: "",
     phone: "",
+    branch: "",
     method: "",
     message: "",
   });
@@ -22,31 +27,55 @@ const SendMessage = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    const selectedBranch = BRANCH_ORDER.find(
+      (branch) => branch.key === formData.branch,
+    );
+    const branchLabel = selectedBranch
+      ? t(selectedBranch.labelKey, {
+          defaultValue: selectedBranch.fallbackLabel,
+        })
+      : formData.branch;
+
     const text = `📩 Yangi xabar:
 👤 Ism: ${formData.fullName}
 📧 Email: ${formData.email}
 📞 Telefon: ${formData.phone}
+📍 Filial: ${branchLabel}
 💬 Aloqa usuli: ${formData.method}
 📝 Xabar: ${formData.message}`;
 
     try {
-      await fetch("http://localhost:5000/notify/telegram", {
+      const response = await fetch(`${API_URL}/notify/telegram`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
+        body: JSON.stringify({
+          text,
+          fullName: formData.fullName,
+          email: formData.email,
+          phone: formData.phone,
+          branch: formData.branch,
+          branchLabel,
+          method: formData.method,
+          message: formData.message,
+        }),
       });
 
-      alert("Message Sent ✅");
+      if (!response.ok) {
+        throw new Error("Telegram notification failed");
+      }
+
+      alert(t("send_success"));
 
       setFormData({
         fullName: "",
         email: "",
         phone: "",
+        branch: "",
         method: "",
         message: "",
       });
     } catch (error) {
-      alert("Xatolik bo‘ldi ❌");
+      alert(t("send_error"));
     }
   };
 
@@ -54,6 +83,7 @@ const SendMessage = () => {
     formData.fullName.trim() &&
     formData.email.trim() &&
     formData.phone.trim() &&
+    formData.branch.trim() &&
     formData.method.trim() &&
     formData.message.trim();
 
@@ -103,8 +133,32 @@ const SendMessage = () => {
               </div>
 
               <div className="sendmessage__form-group">
+                <label>{t("send_branch")}</label>
+                <select
+                  className="sendmessage__branch"
+                  name="branch"
+                  value={formData.branch}
+                  onChange={handleChange}
+                  required
+                >
+                  <option value="" disabled>
+                    {t("send_branch_placeholder")}
+                  </option>
+                  {BRANCH_ORDER.map((branch) => (
+                    <option value={branch.key} key={branch.key}>
+                      {t(branch.labelKey, {
+                        defaultValue: branch.fallbackLabel,
+                      })}
+                    </option>
+                  ))}
+                </select>
+                <FaChevronDown className="select-icon" />
+              </div>
+
+              <div className="sendmessage__form-group">
                 <label>{t("send_method")}</label>
                 <select
+                  className="sendmessage__methods"
                   name="method"
                   value={formData.method}
                   onChange={handleChange}

@@ -1,5 +1,6 @@
 import React from "react";
 import "./gallery.scss";
+import { useTranslation } from "react-i18next";
 
 import img12 from "/12.jpg";
 import img13 from "/13.jpg";
@@ -21,10 +22,11 @@ const topImages = [img12, img13, img14, img15, img16, img17, img18];
 const bottomImages = [img19, img20, img21, img22, img23, img24, img25];
 
 const Gallery = () => {
+  const { t } = useTranslation();
   return (
     <div className="gallery">
       <div className="container">
-        <h2 className="qonoq__title">Gallery — Our space, Our team</h2>
+        <h2 className="qonoq__title">{t("gallery")}</h2>
 
         <div className="gallery__box">
           {/* Fade shadowlar */}

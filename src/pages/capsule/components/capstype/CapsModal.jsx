@@ -1,85 +1,161 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import "./capsmodal.scss";
 import { useTranslation } from "react-i18next";
 import Confirm from "../capstype/Confirm";
-
-const PRICE_MAP = {
-  standard: {
-    "4h": 400000,
-    "6h": 600000,
-    "10h": 800000,
-  },
-  family: {
-    "4h": 600000,
-    "6h": 800000,
-    "10h": 1000000,
-  },
-};
+import {
+  getCapsulePrice,
+  STORAGE_KEY,
+} from "../../../../data/bookingConfig";
 
 const CapsModal = ({ onClose }) => {
   const { t } = useTranslation();
 
   const [closing, setClosing] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
-
-  const bookingBase = JSON.parse(
-    sessionStorage.getItem("qonoq_booking") || "{}"
-  );
-
   const [form, setForm] = useState({
     firstName: "",
     lastName: "",
     phone: "",
     email: "",
   });
+  const [errors, setErrors] = useState({});
+
+  const bookingBase = useMemo(() => {
+    try {
+      const parsed = JSON.parse(
+        sessionStorage.getItem(STORAGE_KEY) || "{}",
+      );
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch (err) {
+      console.error("SESSION STORAGE READ ERROR:", err);
+      return {};
+    }
+  }, []);
 
   const capsuleType = bookingBase.capsuleTypeValue || "standard";
+  const branchKey = bookingBase.branchKey || bookingBase.locationValue;
   const duration = bookingBase.durationValue || "4h";
+  const price = getCapsulePrice(branchKey, capsuleType, duration);
 
-  const price = PRICE_MAP[capsuleType]?.[duration] || 0;
-
-  // ❗ hammasini yopish (Confirm oynadan ham)
   const closeAll = () => {
     setClosing(true);
+
     setTimeout(() => {
       setShowConfirm(false);
-      onClose();
+      onClose?.();
     }, 300);
   };
 
   useEffect(() => {
-    const esc = (e) => e.key === "Escape" && closeAll();
-    document.addEventListener("keydown", esc);
+    const escHandler = (e) => {
+      if (e.key === "Escape") {
+        closeAll();
+      }
+    };
+
+    document.addEventListener("keydown", escHandler);
     document.body.style.overflow = "hidden";
 
     return () => {
-      document.removeEventListener("keydown", esc);
+      document.removeEventListener("keydown", escHandler);
       document.body.style.overflow = "auto";
     };
   }, []);
 
+  const sanitizePhone = (value) => {
+    return String(value || "").replace(/[^\d+]/g, "");
+  };
+
+  const validateForm = () => {
+    const nextErrors = {};
+
+    const firstName = form.firstName.trim();
+    const lastName = form.lastName.trim();
+    const phone = form.phone.trim();
+    const email = form.email.trim();
+
+    if (!firstName) {
+      nextErrors.firstName = t("capsmodal_first_name");
+    }
+
+    if (!lastName) {
+      nextErrors.lastName = t("capsmodal_last_name");
+    }
+
+    if (!phone) {
+      nextErrors.phone = t("capsmodal_phone");
+    }
+
+    if (!email) {
+      nextErrors.email = t("capsmodal_email");
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (email && !emailRegex.test(email)) {
+      nextErrors.email = "Invalid email";
+    }
+
+    const cleanDigits = phone.replace(/\D/g, "");
+    if (phone && cleanDigits.length < 9) {
+      nextErrors.phone = "Invalid phone number";
+    }
+
+    setErrors(nextErrors);
+
+    return Object.keys(nextErrors).length === 0;
+  };
+
+  const handleInputChange = (key, value) => {
+    const nextValue = key === "phone" ? sanitizePhone(value) : value;
+
+    setForm((prev) => ({
+      ...prev,
+      [key]: nextValue,
+    }));
+
+    if (errors[key]) {
+      setErrors((prev) => ({
+        ...prev,
+        [key]: "",
+      }));
+    }
+  };
+
   const handleConfirm = () => {
-    if (!form.firstName || !form.lastName || !form.phone || !form.email) return;
+    if (!validateForm()) return;
 
     const newBooking = {
-      id: crypto.randomUUID(),
+      id:
+        globalThis.crypto?.randomUUID?.() ||
+        `${Date.now()}-${Math.random().toString(36).slice(2)}`,
       ...bookingBase,
-      ...form,
+      firstName: form.firstName.trim(),
+      lastName: form.lastName.trim(),
+      phone: form.phone.trim(),
+      email: form.email.trim().toLowerCase(),
       price,
       createdAt: new Date().toISOString(),
     };
 
-    const old = JSON.parse(localStorage.getItem("my_bookings")) || [];
-    localStorage.setItem("my_bookings", JSON.stringify([...old, newBooking]));
+    try {
+      const oldBookings = JSON.parse(localStorage.getItem("my_bookings")) || [];
+      const safeOldBookings = Array.isArray(oldBookings) ? oldBookings : [];
 
-    // ✅ CapsModal yopiladi, faqat Confirm chiqadi
-    setShowConfirm(true);
+      localStorage.setItem(
+        "my_bookings",
+        JSON.stringify([...safeOldBookings, newBooking]),
+      );
+
+      setShowConfirm(true);
+    } catch (err) {
+      console.error("LOCALSTORAGE WRITE ERROR:", err);
+      alert("Could not save booking. Please try again.");
+    }
   };
 
   return createPortal(
     <>
-      {/* ===== BOOKING FORM MODAL (faqat showConfirm false bo‘lsa) ===== */}
       {!showConfirm && (
         <div
           className={`capsmodal ${closing ? "closing" : ""}`}
@@ -92,27 +168,61 @@ const CapsModal = ({ onClose }) => {
             <h2 className="capsmodal__title">{t("capsmodal_title")}</h2>
 
             <div className="capsmodal__form">
-              {["firstName", "lastName", "phone", "email"].map((key) => (
-                <div className="input-group" key={key}>
-                  <input
-                    required
-                    type={key === "email" ? "email" : "text"}
-                    value={form[key]}
-                    onChange={(e) =>
-                      setForm({ ...form, [key]: e.target.value })
-                    }
-                  />
-                  <label>
-                    {key === "firstName"
-                      ? t("capsmodal_first_name")
-                      : key === "lastName"
-                      ? t("capsmodal_last_name")
-                      : key === "phone"
-                      ? t("capsmodal_phone")
-                      : t("capsmodal_email")}
-                  </label>
-                </div>
-              ))}
+              <div className="input-group">
+                <input
+                  required
+                  type="text"
+                  value={form.firstName}
+                  onChange={(e) =>
+                    handleInputChange("firstName", e.target.value)
+                  }
+                />
+                <label>{t("capsmodal_first_name")}</label>
+                {errors.firstName && (
+                  <small className="input-error">{errors.firstName}</small>
+                )}
+              </div>
+
+              <div className="input-group">
+                <input
+                  required
+                  type="text"
+                  value={form.lastName}
+                  onChange={(e) =>
+                    handleInputChange("lastName", e.target.value)
+                  }
+                />
+                <label>{t("capsmodal_last_name")}</label>
+                {errors.lastName && (
+                  <small className="input-error">{errors.lastName}</small>
+                )}
+              </div>
+
+              <div className="input-group">
+                <input
+                  required
+                  type="text"
+                  value={form.phone}
+                  onChange={(e) => handleInputChange("phone", e.target.value)}
+                />
+                <label>{t("capsmodal_phone")}</label>
+                {errors.phone && (
+                  <small className="input-error">{errors.phone}</small>
+                )}
+              </div>
+
+              <div className="input-group">
+                <input
+                  required
+                  type="email"
+                  value={form.email}
+                  onChange={(e) => handleInputChange("email", e.target.value)}
+                />
+                <label>{t("capsmodal_email")}</label>
+                {errors.email && (
+                  <small className="input-error">{errors.email}</small>
+                )}
+              </div>
             </div>
 
             <div className="capsmodal__price">
@@ -123,6 +233,7 @@ const CapsModal = ({ onClose }) => {
               <button className="btn btn-confirm" onClick={handleConfirm}>
                 {t("capsmodal_confirm")}
               </button>
+
               <button className="btn cancel" onClick={closeAll}>
                 {t("capsmodal_cancel")}
               </button>
@@ -131,10 +242,9 @@ const CapsModal = ({ onClose }) => {
         </div>
       )}
 
-      {/* ===== SUCCESS CONFIRM MODAL (faqat showConfirm true bo‘lsa) ===== */}
       {showConfirm && <Confirm onClose={closeAll} />}
     </>,
-    document.body
+    document.body,
   );
 };
 

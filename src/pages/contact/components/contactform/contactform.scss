@@ -55,6 +55,8 @@
     column-gap: 6px;
     border-radius: 10px;
     width: 160px;
+    border: none;
+    cursor: pointer;
     transition: 0.3s;
     justify-content: center;
 
@@ -69,8 +71,11 @@
   }
 
   &__map {
+    display: block;
     width: 100%;
     height: 350px;
+    object-fit: cover;
+    filter: brightness(0.5);
     border: none;
     border-bottom: 1px solid #e2e8f0;
     border-top: 1px solid #e2e8f0;
@@ -80,7 +85,7 @@
   &__map-div {
     position: absolute;
     bottom: 16px;
-    left: 70px;
+    left: 20px;
     background: rgba(20, 20, 20, 0.35);
     backdrop-filter: blur(20px) saturate(150%);
     -webkit-backdrop-filter: blur(14px) saturate(150%);
@@ -88,7 +93,8 @@
       inset 0 -2px 3px rgba(0, 0, 0, 0.4);
     padding: 13px;
     border-radius: 12px;
-    width: 500px;
+    max-width: 620px;
+    width: 100%;
   }
 
   &__map-title {
@@ -174,12 +180,12 @@
 
   &__div-title {
     font-size: 16px;
-    color: #848484;
+    color: #ffffff;
   }
 
   &__div-text {
     font-size: 14px;
-    color: #a9a9a9;
+    color: #848484 !important;
     margin-top: 3px;
   }
 
@@ -268,7 +274,7 @@
     margin-top: 20px;
     display: flex;
     flex-direction: column;
-    row-gap: 40px;
+    row-gap: 25px;
   }
 
   .contactform__map-div {

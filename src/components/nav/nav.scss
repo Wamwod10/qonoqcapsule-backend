@@ -12,7 +12,8 @@
   &__logo {
     font-size: 28px;
     font-weight: 800;
-    color: #e9eef6; /* matn rangi */
+    color: #e9eef6;
+    /* matn rangi */
     text-decoration: none;
     display: flex;
     align-items: center;
@@ -32,16 +33,12 @@
     gap: 12px;
     padding: 10px 12px;
     border-radius: 28px;
-    background: radial-gradient(
-        160px 80px at 50% 0%,
+    background: radial-gradient(160px 80px at 50% 0%,
         rgba(255, 255, 255, 0.08),
-        transparent 60%
-      ),
-      radial-gradient(
-        160px 80px at 50% 100%,
+        transparent 60%),
+      radial-gradient(160px 80px at 50% 100%,
         rgba(0, 0, 0, 0.18),
-        transparent 60%
-      ),
+        transparent 60%),
       rgba(16, 16, 16, 0.55);
     backdrop-filter: saturate(170%) blur(14px);
     -webkit-backdrop-filter: saturate(170%) blur(14px);
@@ -56,19 +53,16 @@
     position: absolute;
     left: -2px;
     height: 42px;
-    width: 120px; /* JS bilan dinamik o'zgaradi */
+    width: 120px;
+    /* JS bilan dinamik o'zgaradi */
     transform: translateX(0);
     border-radius: 14px;
-    background: radial-gradient(
-        120px 60px at 50% 0%,
+    background: radial-gradient(120px 60px at 50% 0%,
         rgba(255, 255, 255, 0.22),
-        transparent 60%
-      ),
-      radial-gradient(
-        120px 60px at 50% 100%,
+        transparent 60%),
+      radial-gradient(120px 60px at 50% 100%,
         rgba(255, 255, 255, 0.1),
-        transparent 60%
-      ),
+        transparent 60%),
       rgba(255, 255, 255, 0.13);
     border: 1px solid rgba(255, 255, 255, 0.1);
     backdrop-filter: blur(18px) saturate(200%);
@@ -103,9 +97,11 @@
     cursor: pointer;
     text-decoration: none;
     transition: color 0.2s ease, transform 0.12s ease;
+
     &:hover {
       transform: translateY(0);
     }
+
     &.is-active {
       transform: scale(1.05);
       color: #2f86ff;
@@ -128,16 +124,12 @@
     gap: 12px;
     padding: 8px;
     border-radius: 22px;
-    background: radial-gradient(
-        140px 70px at 50% 0%,
+    background: radial-gradient(140px 70px at 50% 0%,
         rgba(255, 255, 255, 0.08),
-        transparent 60%
-      ),
-      radial-gradient(
-        140px 70px at 50% 100%,
+        transparent 60%),
+      radial-gradient(140px 70px at 50% 100%,
         rgba(0, 0, 0, 0.18),
-        transparent 60%
-      ),
+        transparent 60%),
       rgba(16, 16, 16, 0.55);
     backdrop-filter: saturate(170%) blur(14px);
     -webkit-backdrop-filter: saturate(170%) blur(14px);
@@ -163,10 +155,12 @@
     backdrop-filter: blur(10px) saturate(160%);
     -webkit-backdrop-filter: blur(10px) saturate(160%);
     transition: transform 0.15s ease, background 0.2s ease;
+
     &:hover {
       transform: translateY(-1px);
       background: rgba(255, 255, 255, 0.14);
     }
+
     &:active {
       transform: translateY(0);
       box-shadow: inset 0 1px 6px rgba(0, 0, 0, 0.25);
@@ -175,18 +169,15 @@
 
   &__booking {
     color: #ffffff;
-    background: linear-gradient(
-        180deg,
+    background: linear-gradient(180deg,
         rgba(47, 134, 255, 0.25),
-        rgba(47, 134, 255, 0.12)
-      ),
+        rgba(47, 134, 255, 0.12)),
       rgba(255, 255, 255, 0.1);
+
     &:hover {
-      background: linear-gradient(
-          180deg,
+      background: linear-gradient(180deg,
           rgba(47, 134, 255, 0.32),
-          rgba(47, 134, 255, 0.16)
-        ),
+          rgba(47, 134, 255, 0.16)),
         rgba(255, 255, 255, 0.14);
     }
   }
@@ -206,13 +197,11 @@
     padding: 0 14px;
     border-radius: 14px;
     border: 1px solid rgba(255, 255, 255, 0.1);
-    background: linear-gradient(
-        180deg,
+    background: linear-gradient(180deg,
         rgba(255, 255, 255, 0.08),
-        rgba(255, 255, 255, 0.04)
-      ),
+        rgba(255, 255, 255, 0.04)),
       rgba(255, 255, 255, 0.08);
-      backdrop-filter: blur(20px) !important;
+    backdrop-filter: blur(20px) !important;
     color: #e9eef6;
     font-weight: 700;
     backdrop-filter: blur(14px) saturate(170%);
@@ -223,15 +212,18 @@
     outline: none;
     transition: transform 0.15s ease, background 0.2s ease, box-shadow 0.2s ease;
   }
+
   &__lang-toggle:hover {
     transform: translateY(-1px);
   }
+
   &__lang-toggle.is-open {
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18),
       0 12px 28px rgba(0, 0, 0, 0.34);
     z-index: 9999;
   }
-  button{
+
+  button {
     margin-top: 0 !important;
   }
 
@@ -239,10 +231,12 @@
     font-size: 16px;
     line-height: 1;
   }
+
   &__lang-text {
     font-size: 14px;
     font-weight: 700;
   }
+
   &__chev {
     margin-left: 4px;
     opacity: 0.8;
@@ -274,6 +268,7 @@
     flex-direction: column;
     row-gap: 5px;
   }
+
   &__lang-menu.show {
     opacity: 1;
     pointer-events: auto;
@@ -296,15 +291,15 @@
     cursor: pointer;
     transition: background 0.15s ease, transform 0.12s ease, color 0.15s ease;
   }
+
   &__lang-item:hover {
     background: rgba(255, 255, 255, 0.1);
   }
+
   &__lang-item.is-active {
-    background: linear-gradient(
-      180deg,
-      rgba(255, 255, 255, 0.16),
-      rgba(255, 255, 255, 0.1)
-    );
+    background: linear-gradient(180deg,
+        rgba(255, 255, 255, 0.16),
+        rgba(255, 255, 255, 0.1));
     color: #2f86ff;
   }
 }
@@ -312,6 +307,7 @@
 @media (max-width: 1235px) {
   .nav {
     padding: 0 10px;
+
     &__list {
       position: fixed;
       bottom: 10px;
@@ -325,6 +321,7 @@
 @media (max-width: 810px) {
   .nav {
     padding: 0 10px;
+
     &__list {
       position: fixed;
       bottom: 10px;
@@ -343,13 +340,14 @@
 @media (max-width: 700px) {
   .nav {
     padding: 0 10px;
+
     &__list {
       position: fixed;
       bottom: 20px;
       left: 50%;
       transform: translateX(-50%);
       z-index: 9999;
-       column-gap: 8px !important;
+      column-gap: 8px !important;
       padding: 10px 12px !important;
     }
 
@@ -369,13 +367,14 @@
 @media (max-width: 700px) {
   .nav {
     padding: 0 10px;
+
     &__list {
       position: fixed;
       bottom: 10px;
       left: 50%;
       transform: translateX(-50%);
       z-index: 9999;
-      column-gap: 6px ;
+      column-gap: 6px;
       padding: 16px 12px;
     }
 
@@ -389,5 +388,127 @@
       align-items: center;
       justify-content: center;
     }
+  }
+}
+
+@media (max-width: 450px) {
+  .nav__list {
+    border-radius: 20px;
+    padding: 8px 8px !important;
+    left: 50%;
+  }
+
+  .nav__last-box {
+    padding: 7px;
+    gap: 7px;
+    border-radius: 15px !important;
+  }
+
+  .nav__lang-menu.show {
+    margin-top: 8px;
+    backdrop-filter: blur(16px) saturate(170%) !important;
+    background-color: transparent;
+    background-color: #1717189c;
+    z-index: 999;
+    padding: 1.5px;
+    min-width: 155px;
+  }
+
+  .nav__lang-toggle {
+    height: 35px;
+    border-radius: 10px;
+    padding: 6px;
+    font-weight: 400;
+    font-size: 14px !important;
+  }
+
+  .nav__booking {
+    height: 35px;
+    padding: 6px;
+    font-weight: 400;
+    font-size: 14px !important;
+  }
+
+  .nav__logo img {
+    width: 110px;
+  }
+
+}
+
+@media (max-width: 400px) {
+
+
+  .nav__last-box {
+    padding: 6.5px;
+    gap: 8px;
+    border-radius: 12px !important;
+  }
+
+  .nav__lang-menu.show {
+    margin-top: 7px;
+    backdrop-filter: blur(16px) saturate(170%) !important;
+    background-color: transparent;
+    background-color: #1717189c;
+    z-index: 999;
+    padding: 1.5px;
+    min-width: 145px;
+  }
+
+  .nav__lang-toggle {
+    height: 32px;
+    border-radius: 10px;
+    padding: 3px;
+    font-weight: 400;
+    font-size: 13.5px !important;
+  }
+
+  .nav__booking {
+    height: 32px;
+    padding: 5px;
+    font-weight: 400;
+    font-size: 14.5px !important;
+  }
+}
+
+@media (max-width: 370px) {
+
+
+  .nav__last-box {
+    padding: 6px;
+    gap: 7px;
+    border-radius: 10px !important;
+  }
+
+  .nav__lang-menu.show {
+    margin-top: 5px;
+    backdrop-filter: blur(16px) saturate(170%) !important;
+    background-color: transparent;
+    background-color: #1717189c;
+    z-index: 999;
+    padding: 1px;
+    min-width: 135px;
+  }
+
+  .nav__lang-toggle {
+    height: 30px;
+    border-radius: 10px;
+    padding: 3px;
+    font-weight: 400;
+    font-size: 12.5px !important;
+  }
+
+  .nav__chev {
+    margin-left: 0px;
+  }
+
+  .nav__booking {
+    height: 30px;
+    padding: 5px;
+    font-weight: 400;
+    font-size: 13px !important;
+  }
+
+  .nav__logo img {
+    width: 100px;
   }
 }

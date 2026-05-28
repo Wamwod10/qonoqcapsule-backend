@@ -1,6 +1,0 @@
-{
-  "rules": { "csstools/use-logical": null },
-  "stylelint.validate": ["scss"],
-  "editor.codeActionsOnSave": { "source.fixAll.stylelint": false },
-  "scss.validate": false
-}

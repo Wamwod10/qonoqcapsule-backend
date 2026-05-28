@@ -113,6 +113,19 @@
     color: #606060;
     user-select: none;
   }
+
+  &__phones {
+    display: flex;
+    flex-direction: column;
+    margin-top: 10px;
+    row-gap: 5px;
+
+    a {
+      display: flex;
+      align-items: center;
+      column-gap: 5px;
+    }
+  }
 }
 
 @media (max-width: 1024px) {

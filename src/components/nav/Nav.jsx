@@ -38,7 +38,14 @@ export default function Nav() {
     // normalize trailing slash
     const p = pathname.split("?")[0].split("#")[0];
     if (p === "/" || p === "") return 0;
-    if (p.startsWith("/capsule")) return 1;
+    if (
+      p.startsWith("/capsule") ||
+      p.startsWith("/tashkent-airport") ||
+      p.startsWith("/samarkand-airport") ||
+      p.startsWith("/samarkand-railway")
+    ) {
+      return 1;
+    }
     if (p.startsWith("/rules")) return 2;
     if (p.startsWith("/services")) return 3;
     if (p.startsWith("/contact")) return 4;
@@ -190,9 +197,7 @@ export default function Nav() {
             <li className="nav__item" role="presentation">
               <NavLink
                 to="/capsule"
-                className={({ isActive }) =>
-                  `nav__link ${isActive ? "is-active" : ""}`
-                }
+                className={() => `nav__link ${active === 1 ? "is-active" : ""}`}
                 role="tab"
                 aria-selected={active === 1}
                 onClick={() => setActive(1)}

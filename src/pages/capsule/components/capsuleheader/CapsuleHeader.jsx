@@ -7,10 +7,9 @@ import { FaBuildingColumns } from "react-icons/fa6";
 import { FiRefreshCcw } from "react-icons/fi";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import { STORAGE_KEY } from "../../../../data/bookingConfig";
 
-const STORAGE_KEY = "qonoq_booking";
-
-const CapsuleHeader = () => {
+const CapsuleHeader = ({ branchConfig }) => {
   const { t } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
@@ -144,7 +143,13 @@ const CapsuleHeader = () => {
               </span>
             </div>
             <p className="capsheader__date">
-              {showOrEmpty(booking.locationLabel)}
+              {showOrEmpty(
+                branchConfig
+                  ? t(branchConfig.labelKey, {
+                      defaultValue: branchConfig.fallbackLabel,
+                    })
+                  : booking.locationLabel,
+              )}
             </p>
           </div>
         </div>

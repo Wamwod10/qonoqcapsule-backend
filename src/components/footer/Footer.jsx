@@ -4,6 +4,7 @@ import { RiTelegram2Fill } from "react-icons/ri";
 import { AiFillInstagram } from "react-icons/ai";
 import { FaGoogle } from "react-icons/fa";
 import { useTranslation } from "react-i18next";
+import { IoIosCall } from "react-icons/io";
 
 const Footer = () => {
   const { t } = useTranslation();
@@ -79,11 +80,15 @@ const Footer = () => {
               </p>
               <p className="footer__card-contact">
                 {t("footer_contact_phone_label")}{" "}
-                <a href="tel:+998958772424">+998 95 877-24-24</a>
               </p>
+              <div className="footer__phones">
+                <a href="tel:+998958772424">Tashkent Airport: +998 95 232 24 24 <IoIosCall /></a>
+                <a href="tel:+998958772424">Samarkand Airport: +998 95 662 24 14 <IoIosCall /></a>
+                <a href="tel:+998958772424">Samarkand Railway: +998 95 236 24 14 <IoIosCall /></a>
+              </div>
               <p className="footer__card-contact">
                 {t("footer_contact_email_label")}{" "}
-                <a href="mailto:qonoqhotel@mail.ru">qonoqhotel@mail.ru</a>
+                <a href="mailto:qonoqcapsule@mail.ru">qonoqcapsule@mail.ru</a>
               </p>
             </div>
           </div>

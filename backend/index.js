@@ -266,9 +266,31 @@ app.use(express.json());
 
 /* ================= DATABASE ================= */
 
+const isProduction =
+  process.env.NODE_ENV === "production" ||
+  process.env.RENDER === "true" ||
+  process.env.RENDER_SERVICE_ID;
+
+const databaseUrl = process.env.DATABASE_URL;
+
+if (!databaseUrl) {
+  console.error("DATABASE_URL is not set. PostgreSQL features will fail until it is configured.");
+}
+
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
+  connectionString: databaseUrl,
+  ssl: isProduction ? { rejectUnauthorized: false } : undefined,
+  max: Number(process.env.PG_POOL_MAX || 10),
+  idleTimeoutMillis: Number(process.env.PG_IDLE_TIMEOUT_MS || 30000),
+  connectionTimeoutMillis: Number(process.env.PG_CONNECTION_TIMEOUT_MS || 15000),
+  keepAlive: true,
+});
+
+pool.on("error", (err) => {
+  console.error("POSTGRES POOL ERROR:", {
+    message: err.message,
+    code: err.code,
+  });
 });
 
 async function initDB() {
@@ -327,10 +349,23 @@ async function initDB() {
   console.log("✅ PostgreSQL connected");
 }
 
-initDB().catch((err) => {
-  console.error("DB INIT ERROR:", err);
-  process.exit(1);
-});
+let dbReady = false;
+
+initDB()
+  .then(() => {
+    dbReady = true;
+  })
+  .catch((err) => {
+    dbReady = false;
+    console.error("DB INIT ERROR:", {
+      message: err.message,
+      code: err.code,
+      detail: err.detail,
+      hint: err.hint,
+      host: err.address,
+      port: err.port,
+    });
+  });
 
 /* ================= TEST ================= */
 

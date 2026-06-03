@@ -1417,6 +1417,45 @@ app.get("/api/payment-status/:orderId", async (req, res) => {
   }
 });
 
+app.post("/api/test-email", async (req, res) => {
+  try {
+    if (isProduction) {
+      const expectedToken = process.env.TEST_EMAIL_TOKEN;
+      const receivedToken = req.headers["x-test-email-token"];
+
+      if (!expectedToken || receivedToken !== expectedToken) {
+        return res.status(403).json({
+          success: false,
+          error: "Test email endpoint is protected in production",
+        });
+      }
+    }
+
+    const email = String(req.body?.email || "").trim();
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        error: "email is required",
+      });
+    }
+
+    await sendMail({
+      to: email,
+      subject: "Qonoq Capsule SMTP Test",
+      text: "SMTP test email from Qonoq Capsule backend.",
+    });
+
+    return res.json({ success: true });
+  } catch (err) {
+    console.error("TEST EMAIL ERROR:", err.message);
+    return res.status(500).json({
+      success: false,
+      error: err.message || "Email send failed",
+    });
+  }
+});
+
 /* ================= TELEGRAM CONTACT ================= */
 
 app.post("/notify/telegram", async (req, res) => {

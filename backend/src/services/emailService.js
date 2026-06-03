@@ -1,33 +1,42 @@
 import nodemailer from "nodemailer";
 
 let transporter;
+let missingCredentialsLogged = false;
 
-const getSmtpConfig = () => {
-  const host = process.env.SMTP_HOST || "smtp.gmail.com";
-  const port = Number(process.env.SMTP_PORT || 465);
-  const user = process.env.SMTP_USER || process.env.EMAIL_USER;
-  const pass = process.env.SMTP_PASS || process.env.EMAIL_PASS;
+const getSmtpConfig = () => ({
+  host: process.env.SMTP_HOST || "smtp.gmail.com",
+  port: Number(process.env.SMTP_PORT) || 465,
+  secure: true,
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
+  },
+});
 
-  return {
-    host,
-    port,
-    secure: port === 465,
-    auth: user && pass ? { user, pass } : undefined,
-  };
+const assertSmtpCredentials = () => {
+  if (process.env.SMTP_USER && process.env.SMTP_PASS) {
+    return;
+  }
+
+  if (!missingCredentialsLogged) {
+    console.error("Missing SMTP credentials");
+    missingCredentialsLogged = true;
+  }
+
+  throw new Error("Missing SMTP credentials");
 };
 
 const getTransporter = () => {
   if (!transporter) {
+    assertSmtpCredentials();
     transporter = nodemailer.createTransport(getSmtpConfig());
   }
 
   return transporter;
 };
 
-const getFromAddress = () => {
-  const fallbackUser = process.env.SMTP_USER || process.env.EMAIL_USER || "qonoqhotel@mail.ru";
-  return process.env.SMTP_FROM || `Qonoq Capsule <${fallbackUser}>`;
-};
+const getFromAddress = () =>
+  process.env.SMTP_FROM || `"Qonoq Capsule" <${process.env.SMTP_USER}>`;
 
 const formatPrice = (value) => Number(value || 0).toLocaleString("en-US");
 
@@ -60,7 +69,7 @@ Price: ${formatPrice(booking.price)} UZS
 Thank you for your reservation.
 We look forward to welcoming you!
 
-— Qonoq Capsule Team`;
+-- Qonoq Capsule Team`;
 
 export const sendMail = (options) =>
   getTransporter().sendMail({

@@ -5,8 +5,15 @@ import crypto from "crypto";
 import axios from "axios";
 import { fileURLToPath } from "url";
 import path from "path";
-import nodemailer from "nodemailer";
 import pkg from "pg";
+import {
+  sendBookingConfirmationEmail,
+  sendMail,
+} from "./src/services/emailService.js";
+import {
+  createReceiptNumber,
+  generatePaymentReceiptPdf,
+} from "./src/services/paymentReceiptService.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -283,7 +290,14 @@ async function initDB() {
   ADD COLUMN IF NOT EXISTS phone TEXT,
   ADD COLUMN IF NOT EXISTS email TEXT,
   ADD COLUMN IF NOT EXISTS price NUMERIC DEFAULT 0,
-  ADD COLUMN IF NOT EXISTS payment_status TEXT DEFAULT 'confirmed'
+  ADD COLUMN IF NOT EXISTS payment_status TEXT DEFAULT 'confirmed',
+  ADD COLUMN IF NOT EXISTS "emailSent" BOOLEAN DEFAULT false,
+  ADD COLUMN IF NOT EXISTS "emailSentAt" TEXT,
+  ADD COLUMN IF NOT EXISTS "receiptNumber" TEXT,
+  ADD COLUMN IF NOT EXISTS "octoPaymentId" TEXT,
+  ADD COLUMN IF NOT EXISTS "paymentProvider" TEXT,
+  ADD COLUMN IF NOT EXISTS "paymentMethod" TEXT,
+  ADD COLUMN IF NOT EXISTS "paidAt" TEXT
 `);
 
   await pool.query(`
@@ -305,7 +319,9 @@ async function initDB() {
   // 🔥 SHUNI QO‘SHASAN
   await pool.query(`
     ALTER TABLE pending_payments
-    ADD COLUMN IF NOT EXISTS "telegramsent" BOOLEAN DEFAULT false
+    ADD COLUMN IF NOT EXISTS "telegramsent" BOOLEAN DEFAULT false,
+    ADD COLUMN IF NOT EXISTS "emailSent" BOOLEAN DEFAULT false,
+    ADD COLUMN IF NOT EXISTS "emailSentAt" TEXT
   `);
 
   console.log("✅ PostgreSQL connected");
@@ -320,18 +336,6 @@ initDB().catch((err) => {
 
 app.get("/", (req, res) => {
   res.send("Backend working ✅");
-});
-
-/* ================= EMAIL ================= */
-
-const mailTransporter = nodemailer.createTransport({
-  host: "smtp.gmail.com",
-  port: 465,
-  secure: true,
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
 });
 
 /* ================= HELPERS ================= */
@@ -454,6 +458,144 @@ async function checkManyBookingsAvailability(bookings = []) {
   return { available: true };
 }
 
+const getPaymentBookingIds = (payment = {}) => {
+  const bookings = Array.isArray(payment.bookings) ? payment.bookings : [];
+
+  return bookings.map((item) => item?.id).filter(Boolean);
+};
+
+const getPaidBookingStatus = (status) => String(status || "").toLowerCase() === "paid";
+
+const mapBookingRowToEmailData = (booking) => ({
+  guestName: booking.name || "",
+  guestEmail: booking.email || "",
+  guestPhone: booking.phone || "",
+  bookingDate: booking.createdAt || booking.createdat || "",
+  checkInDate: booking.date || "",
+  checkInTime: booking.time || "",
+  roomType: booking.capsuleType || booking.capsuletype || "",
+  duration: booking.duration ? `${booking.duration} hours` : "",
+  price: booking.price || 0,
+});
+
+const mapBookingRowToReceiptData = (booking, receiptNumber) => ({
+  receiptNumber,
+  octoPaymentId: booking.octoPaymentId || booking.octopaymentid || "",
+  paymentDate: booking.paidAt || booking.paidat || booking.createdAt || booking.createdat || "",
+  guestName: booking.name || "",
+  guestEmail: booking.email || "",
+  guestPhone: booking.phone || "",
+  amount: booking.price || 0,
+  paymentProvider: booking.paymentProvider || booking.paymentprovider || "Octo Payment",
+  paymentMethod: booking.paymentMethod || booking.paymentmethod || "Online Card",
+});
+
+async function sendPaidBookingEmailOnce(bookingId, orderId) {
+  const client = await pool.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    const bookingRes = await client.query(
+      `SELECT * FROM bookings WHERE id=$1 FOR UPDATE`,
+      [bookingId],
+    );
+
+    if (bookingRes.rowCount === 0) {
+      await client.query("COMMIT");
+      return { sent: false, reason: "Booking not found" };
+    }
+
+    const booking = bookingRes.rows[0];
+
+    if (booking.emailSent === true || booking.emailsent === true) {
+      await client.query("COMMIT");
+      return { sent: false, reason: "Email already sent" };
+    }
+
+    if (!booking.email) {
+      await client.query("COMMIT");
+      return { sent: false, reason: "Guest email is missing" };
+    }
+
+    if (!getPaidBookingStatus(booking.payment_status)) {
+      await client.query("COMMIT");
+      return { sent: false, reason: "Booking is not paid" };
+    }
+
+    const paidAt = booking.paidAt || booking.paidat || new Date().toISOString();
+    const receiptNumber =
+      booking.receiptNumber ||
+      booking.receiptnumber ||
+      createReceiptNumber({ bookingId, orderId, paidAt });
+    const receiptPdf = await generatePaymentReceiptPdf(
+      mapBookingRowToReceiptData({ ...booking, paidAt }, receiptNumber),
+    );
+
+    await sendBookingConfirmationEmail({
+      booking: mapBookingRowToEmailData(booking),
+      receiptPdf,
+      receiptNumber,
+    });
+
+    await client.query(
+      `
+        UPDATE bookings
+        SET
+          "emailSent" = true,
+          "emailSentAt" = $2,
+          "receiptNumber" = COALESCE("receiptNumber", $3),
+          "paidAt" = COALESCE("paidAt", $4)
+        WHERE id = $1
+      `,
+      [bookingId, new Date().toISOString(), receiptNumber, paidAt],
+    );
+
+    await client.query("COMMIT");
+    return { sent: true, receiptNumber };
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+async function sendPaidBookingEmails({ bookingIds = [], orderId }) {
+  const uniqueBookingIds = [...new Set(bookingIds.filter(Boolean))];
+  let sentCount = 0;
+  let failedCount = 0;
+
+  for (const bookingId of uniqueBookingIds) {
+    try {
+      const result = await sendPaidBookingEmailOnce(bookingId, orderId);
+
+      if (result.sent) {
+        sentCount += 1;
+      }
+    } catch (err) {
+      failedCount += 1;
+      console.error("BOOKING CONFIRMATION EMAIL ERROR:", {
+        bookingId,
+        message: err.message,
+      });
+    }
+  }
+
+  if (uniqueBookingIds.length > 0 && failedCount === 0) {
+    await pool.query(
+      `
+        UPDATE pending_payments
+        SET "emailSent" = true, "emailSentAt" = $2
+        WHERE id = $1
+      `,
+      [orderId, new Date().toISOString()],
+    );
+  }
+
+  return { sentCount, failedCount };
+}
+
 async function savePendingPayment({
   orderId,
   octoPaymentId = null,
@@ -559,11 +701,16 @@ async function finalizePayment(orderId, callbackPayload) {
       callbackPayload?.data?.octo_payment_UUID ||
       callbackPayload?.data?.octoPaymentId ||
       null;
+    const resolvedOctoPaymentId = octoPaymentId || payment.octoPaymentId || orderId;
 
     // ❗ Duplicate Telegram oldini olish
     if (payment.telegramsent === true) {
       await client.query("COMMIT");
-      return { ok: true, message: "Already processed (telegram sent)" };
+      return {
+        ok: true,
+        message: "Already processed (telegram sent)",
+        bookingIds: getPaymentBookingIds(payment),
+      };
     }
 
     if (isSuccessStatus(currentStatus)) {
@@ -585,7 +732,11 @@ async function finalizePayment(orderId, callbackPayload) {
       );
 
       await client.query("COMMIT");
-      return { ok: true, message: "Already finalized" };
+      return {
+        ok: true,
+        message: "Already finalized",
+        bookingIds: getPaymentBookingIds(payment),
+      };
     }
 
     if (!isSuccessStatus(callbackStatus)) {
@@ -655,18 +806,50 @@ async function finalizePayment(orderId, callbackPayload) {
       }
     }
 
+    const createdBookingIds = [];
+    const paidAt = new Date().toISOString();
+
     for (const rawItem of bookings) {
       const item = normalizeBookingItem(rawItem);
 
       const bookingId = rawItem.id || crypto.randomUUID();
       const createdAt = new Date().toISOString();
+      const receiptNumber = createReceiptNumber({
+        bookingId,
+        orderId,
+        paidAt,
+      });
 
       await client.query(
         `
     INSERT INTO bookings 
-    (id, branch, "capsuleType", date, time, duration, "createdAt", name, phone, email, price, payment_status)
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
-    ON CONFLICT (id) DO NOTHING
+    (
+      id,
+      branch,
+      "capsuleType",
+      date,
+      time,
+      duration,
+      "createdAt",
+      name,
+      phone,
+      email,
+      price,
+      payment_status,
+      "receiptNumber",
+      "octoPaymentId",
+      "paymentProvider",
+      "paymentMethod",
+      "paidAt"
+    )
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+    ON CONFLICT (id) DO UPDATE SET
+      payment_status = EXCLUDED.payment_status,
+      "receiptNumber" = COALESCE(bookings."receiptNumber", EXCLUDED."receiptNumber"),
+      "octoPaymentId" = COALESCE(bookings."octoPaymentId", EXCLUDED."octoPaymentId"),
+      "paymentProvider" = COALESCE(bookings."paymentProvider", EXCLUDED."paymentProvider"),
+      "paymentMethod" = COALESCE(bookings."paymentMethod", EXCLUDED."paymentMethod"),
+      "paidAt" = COALESCE(bookings."paidAt", EXCLUDED."paidAt")
   `,
         [
           bookingId,
@@ -681,8 +864,15 @@ async function finalizePayment(orderId, callbackPayload) {
           rawItem.email || payment.email || "",
           Number(rawItem.price || payment.amount || 0),
           "paid",
+          receiptNumber,
+          resolvedOctoPaymentId,
+          "Octo Payment",
+          "Online Card",
+          paidAt,
         ],
       );
+
+      createdBookingIds.push(bookingId);
     }
 
     // 🔥 TELEGRAM SEND (ENG MUHIM)
@@ -735,7 +925,11 @@ async function finalizePayment(orderId, callbackPayload) {
 
     await client.query("COMMIT");
 
-    return { ok: true, message: "Payment finalized and telegram sent" };
+    return {
+      ok: true,
+      message: "Payment finalized and telegram sent",
+      bookingIds: createdBookingIds,
+    };
   } catch (err) {
     await client.query("ROLLBACK");
     throw err;
@@ -840,7 +1034,14 @@ app.get("/api/capsule-admin/bookings", async (req, res) => {
         phone,
         email,
         price,
-        payment_status
+        payment_status,
+        "emailSent",
+        "emailSentAt",
+        "receiptNumber",
+        "octoPaymentId",
+        "paymentProvider",
+        "paymentMethod",
+        "paidAt"
       FROM bookings
     `;
 
@@ -878,7 +1079,14 @@ app.get("/api/capsule-admin/bookings/:id", async (req, res) => {
           phone,
           email,
           price,
-          payment_status
+          payment_status,
+          "emailSent",
+          "emailSentAt",
+          "receiptNumber",
+          "octoPaymentId",
+          "paymentProvider",
+          "paymentMethod",
+          "paidAt"
         FROM bookings
         WHERE id=$1
       `,
@@ -1121,6 +1329,17 @@ app.post("/api/octo-callback", async (req, res) => {
 
     const result = await finalizePayment(orderId, req.body);
 
+    if (result.ok && Array.isArray(result.bookingIds)) {
+      try {
+        await sendPaidBookingEmails({
+          bookingIds: result.bookingIds,
+          orderId,
+        });
+      } catch (err) {
+        console.error("PAYMENT EMAIL FLOW ERROR:", err.message);
+      }
+    }
+
     if (!result.ok) {
       return res.status(200).json({
         status: "warning",
@@ -1148,7 +1367,7 @@ app.get("/api/payment-status/:orderId", async (req, res) => {
     const { orderId } = req.params;
 
     const result = await pool.query(
-      `SELECT id, "octoPaymentId", amount, phone, email, name, bookings, status, "createdAt", "updatedAt" FROM pending_payments WHERE id=$1`,
+      `SELECT id, "octoPaymentId", amount, phone, email, name, bookings, status, "createdAt", "updatedAt", "emailSent", "emailSentAt" FROM pending_payments WHERE id=$1`,
       [orderId],
     );
 
@@ -1248,8 +1467,7 @@ app.post("/notify/email", async (req, res) => {
   try {
     const { booking } = req.body;
 
-    await mailTransporter.sendMail({
-      from: `"Qonoq Capsule" <${process.env.EMAIL_USER}>`,
+    await sendMail({
       to: booking.email,
       subject: "Bron tasdiqlandi",
       text: `Booking confirmed

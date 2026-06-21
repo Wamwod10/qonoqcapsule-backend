@@ -343,7 +343,35 @@ async function initDB() {
     ALTER TABLE pending_payments
     ADD COLUMN IF NOT EXISTS "telegramsent" BOOLEAN DEFAULT false,
     ADD COLUMN IF NOT EXISTS "emailSent" BOOLEAN DEFAULT false,
-    ADD COLUMN IF NOT EXISTS "emailSentAt" TEXT
+    ADD COLUMN IF NOT EXISTS "emailSentAt" TEXT,
+    ADD COLUMN IF NOT EXISTS "idempotencyKey" TEXT
+  `);
+
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS pending_payments_idempotency_key_idx
+    ON pending_payments ("idempotencyKey")
+    WHERE "idempotencyKey" IS NOT NULL
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS telegram_notifications (
+      "idempotencyKey" TEXT PRIMARY KEY,
+      kind TEXT NOT NULL,
+      "entityId" TEXT,
+      status TEXT NOT NULL DEFAULT 'sending',
+      "messageId" TEXT,
+      error TEXT,
+      "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS notification_dedup (
+      fingerprint TEXT PRIMARY KEY,
+      "notificationKey" TEXT NOT NULL,
+      "lastAttemptAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
   `);
 
   console.log("✅ PostgreSQL connected");
@@ -525,6 +553,189 @@ const mapBookingRowToReceiptData = (booking, receiptNumber) => ({
   paymentMethod: booking.paymentMethod || booking.paymentmethod || "Online Card",
 });
 
+const normalizeDedupValue = (value) =>
+  String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+
+const createNotificationFingerprint = (body = {}) => {
+  const fields = [
+    body.email,
+    body.phone,
+    body.message || body.text,
+    body.date,
+    body.time,
+    body.fullName || body.name,
+    body.branch || body.branchKey || body.location,
+    body.method,
+  ];
+
+  return crypto
+    .createHash("sha256")
+    .update(fields.map(normalizeDedupValue).join("|"))
+    .digest("hex");
+};
+
+async function claimRecentNotification(fingerprint, kind) {
+  const notificationKey = `${kind}:${crypto.randomUUID()}`;
+  const scopedFingerprint = `${kind}:${fingerprint}`;
+  const result = await pool.query(
+    `
+      INSERT INTO notification_dedup
+        (fingerprint, "notificationKey", "lastAttemptAt")
+      VALUES ($1, $2, NOW())
+      ON CONFLICT (fingerprint) DO UPDATE
+      SET
+        "notificationKey" = EXCLUDED."notificationKey",
+        "lastAttemptAt" = NOW()
+      WHERE notification_dedup."lastAttemptAt" <= NOW() - INTERVAL '30 seconds'
+      RETURNING "notificationKey"
+    `,
+    [scopedFingerprint, notificationKey],
+  );
+
+  if (result.rows[0]?.notificationKey) {
+    return result.rows[0].notificationKey;
+  }
+
+  const existing = await pool.query(
+    `SELECT "notificationKey" FROM notification_dedup WHERE fingerprint=$1`,
+    [scopedFingerprint],
+  );
+
+  return existing.rows[0]?.notificationKey || null;
+}
+
+async function sendTelegramOnce({
+  idempotencyKey,
+  kind,
+  entityId,
+  botToken,
+  chatId,
+  text,
+}) {
+  if (!idempotencyKey || !botToken || !chatId || !String(text || "").trim()) {
+    throw new Error("Telegram notification configuration is incomplete");
+  }
+
+  const claim = await pool.query(
+    `
+      INSERT INTO telegram_notifications
+        ("idempotencyKey", kind, "entityId", status, "createdAt", "updatedAt")
+      VALUES ($1, $2, $3, 'sending', NOW(), NOW())
+      ON CONFLICT ("idempotencyKey") DO NOTHING
+      RETURNING "idempotencyKey"
+    `,
+    [idempotencyKey, kind, entityId || null],
+  );
+
+  if (claim.rowCount === 0) {
+    const existing = await pool.query(
+      `SELECT status, "messageId" FROM telegram_notifications WHERE "idempotencyKey"=$1`,
+      [idempotencyKey],
+    );
+
+    return {
+      sent: false,
+      duplicate: true,
+      status: existing.rows[0]?.status || "unknown",
+      messageId: existing.rows[0]?.messageId || null,
+    };
+  }
+
+  try {
+    const telegramResponse = await axios.post(
+      `https://api.telegram.org/bot${botToken}/sendMessage`,
+      { chat_id: chatId, text },
+    );
+    const messageId = telegramResponse.data?.result?.message_id || null;
+
+    await pool.query(
+      `
+        UPDATE telegram_notifications
+        SET status='sent', "messageId"=$2, error=NULL, "updatedAt"=NOW()
+        WHERE "idempotencyKey"=$1
+      `,
+      [idempotencyKey, messageId ? String(messageId) : null],
+    );
+
+    console.log("TELEGRAM SENT:", {
+      kind,
+      entityId: entityId || null,
+      messageId,
+    });
+
+    return { sent: true, duplicate: false, status: "sent", messageId };
+  } catch (error) {
+    const errorMessage = String(
+      error.response?.data?.description || error.message || "Telegram send failed",
+    ).slice(0, 1000);
+
+    await pool.query(
+      `
+        UPDATE telegram_notifications
+        SET status='failed', error=$2, "updatedAt"=NOW()
+        WHERE "idempotencyKey"=$1
+      `,
+      [idempotencyKey, errorMessage],
+    );
+
+    console.error("TELEGRAM SEND ERROR:", {
+      kind,
+      entityId: entityId || null,
+      message: errorMessage,
+    });
+
+    throw error;
+  }
+}
+
+async function sendPaidBookingTelegramNotifications({ payment, orderId }) {
+  const bookings = Array.isArray(payment.bookings) ? payment.bookings : [];
+  const results = [];
+
+  for (const rawItem of bookings) {
+    const item = normalizeBookingItem(rawItem);
+    const bookingId = rawItem.id;
+
+    if (!bookingId) {
+      results.push({ sent: false, status: "missing_booking_id" });
+      continue;
+    }
+
+    try {
+      results.push(
+        await sendTelegramOnce({
+          idempotencyKey: `booking:${bookingId}`,
+          kind: "booking",
+          entityId: bookingId,
+          botToken: process.env.BOOKING_BOT_TOKEN,
+          chatId: getTelegramChatIdForBranch(item.branch),
+          text: buildTelegramBookingText({ rawItem, item, payment, orderId }),
+        }),
+      );
+    } catch {
+      results.push({ sent: false, status: "failed" });
+    }
+  }
+
+  const allDelivered =
+    results.length > 0 &&
+    results.every((result) =>
+      result.sent || (result.duplicate && result.status === "sent"),
+    );
+
+  if (allDelivered) {
+    await pool.query(
+      `UPDATE pending_payments SET "telegramsent"=true, "updatedAt"=$2 WHERE id=$1`,
+      [orderId, new Date().toISOString()],
+    );
+  }
+
+  return { allDelivered, results };
+}
+
 async function sendPaidBookingEmailOnce(bookingId, orderId) {
   const client = await pool.connect();
 
@@ -634,6 +845,7 @@ async function sendPaidBookingEmails({ bookingIds = [], orderId }) {
 async function savePendingPayment({
   orderId,
   octoPaymentId = null,
+  idempotencyKey = null,
   amount,
   phone = "",
   email = "",
@@ -646,11 +858,12 @@ async function savePendingPayment({
   await pool.query(
     `
       INSERT INTO pending_payments
-      (id, "octoPaymentId", amount, phone, email, name, bookings, status, "createdAt", "updatedAt")
-      VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9,$10)
+      (id, "octoPaymentId", "idempotencyKey", amount, phone, email, name, bookings, status, "createdAt", "updatedAt")
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10,$11)
       ON CONFLICT (id)
       DO UPDATE SET
         "octoPaymentId" = EXCLUDED."octoPaymentId",
+        "idempotencyKey" = COALESCE(pending_payments."idempotencyKey", EXCLUDED."idempotencyKey"),
         amount = EXCLUDED.amount,
         phone = EXCLUDED.phone,
         email = EXCLUDED.email,
@@ -662,6 +875,7 @@ async function savePendingPayment({
     [
       orderId,
       octoPaymentId,
+      idempotencyKey,
       Number(amount),
       phone,
       email,
@@ -737,6 +951,32 @@ async function finalizePayment(orderId, callbackPayload) {
       callbackPayload?.data?.octoPaymentId ||
       null;
     const resolvedOctoPaymentId = octoPaymentId || payment.octoPaymentId || orderId;
+    const callbackAmount =
+      callbackPayload?.total_sum ??
+      callbackPayload?.amount ??
+      callbackPayload?.data?.total_sum ??
+      callbackPayload?.data?.amount;
+    const hasAmountMismatch =
+      callbackAmount !== undefined &&
+      callbackAmount !== null &&
+      Number(callbackAmount) !== Number(payment.amount);
+    const hasPaymentIdMismatch =
+      Boolean(payment.octoPaymentId && octoPaymentId) &&
+      String(payment.octoPaymentId) !== String(octoPaymentId);
+
+    if (hasAmountMismatch || hasPaymentIdMismatch) {
+      await client.query(
+        `
+          UPDATE pending_payments
+          SET status='callback_validation_failed', "rawCallback"=$2::jsonb, "updatedAt"=$3
+          WHERE id=$1
+        `,
+        [orderId, JSON.stringify(callbackPayload), new Date().toISOString()],
+      );
+      await client.query("COMMIT");
+
+      return { ok: false, message: "Payment callback validation failed" };
+    }
 
     // ❗ Duplicate Telegram oldini olish
     if (payment.telegramsent === true) {
@@ -767,9 +1007,17 @@ async function finalizePayment(orderId, callbackPayload) {
       );
 
       await client.query("COMMIT");
+
+      const telegramResult = await sendPaidBookingTelegramNotifications({
+        payment,
+        orderId,
+      });
+
       return {
         ok: true,
-        message: "Already finalized",
+        message: telegramResult.allDelivered
+          ? "Already finalized"
+          : "Payment finalized; Telegram notification was not delivered",
         bookingIds: getPaymentBookingIds(payment),
       };
     }
@@ -910,29 +1158,7 @@ async function finalizePayment(orderId, callbackPayload) {
       createdBookingIds.push(bookingId);
     }
 
-    // 🔥 TELEGRAM SEND (ENG MUHIM)
-    try {
-      for (const rawItem of bookings) {
-        const item = normalizeBookingItem(rawItem);
-        const text = buildTelegramBookingText({
-          rawItem,
-          item,
-          payment,
-          orderId,
-        });
-
-        await axios.post(
-          `https://api.telegram.org/bot${process.env.BOOKING_BOT_TOKEN}/sendMessage`,
-          {
-            chat_id: getTelegramChatIdForBranch(item.branch),
-            text,
-          },
-        );
-      }
-    } catch (err) {
-      console.log("TELEGRAM AUTO ERROR:", err.message);
-    }
-
+    // Payment and bookings are committed before external notifications.
     await client.query(
       `
         UPDATE pending_payments
@@ -952,17 +1178,18 @@ async function finalizePayment(orderId, callbackPayload) {
       ],
     );
 
-    // 🔐 telegram sent flag
-    await client.query(
-      `UPDATE pending_payments SET "telegramsent"=true WHERE id=$1`,
-      [orderId],
-    );
-
     await client.query("COMMIT");
+
+    const telegramResult = await sendPaidBookingTelegramNotifications({
+      payment,
+      orderId,
+    });
 
     return {
       ok: true,
-      message: "Payment finalized and telegram sent",
+      message: telegramResult.allDelivered
+        ? "Payment finalized and telegram sent"
+        : "Payment finalized; Telegram notification was not delivered",
       bookingIds: createdBookingIds,
     };
   } catch (err) {
@@ -1218,6 +1445,8 @@ app.delete("/api/capsule-admin/bookings/:id", async (req, res) => {
 /* ================= OCTO PAYMENT ================= */
 
 app.post("/api/create-payment", async (req, res) => {
+  let createdOrderId = null;
+
   try {
     const {
       amount,
@@ -1226,6 +1455,13 @@ app.post("/api/create-payment", async (req, res) => {
       email = "",
       name = "",
     } = req.body;
+    const idempotencyKey = String(
+      req.get("Idempotency-Key") || req.body.idempotencyKey || "",
+    ).trim();
+
+    if (idempotencyKey.length > 200) {
+      return res.status(400).json({ error: "Invalid idempotency key" });
+    }
 
     if (!amount || Number(amount) <= 0) {
       return res.status(400).json({ error: "Invalid amount" });
@@ -1235,6 +1471,40 @@ app.post("/api/create-payment", async (req, res) => {
       return res.status(400).json({ error: "Bookings are required" });
     }
 
+    if (idempotencyKey) {
+      const existingResult = await pool.query(
+        `SELECT * FROM pending_payments WHERE "idempotencyKey"=$1 LIMIT 1`,
+        [idempotencyKey],
+      );
+      const existing = existingResult.rows[0];
+
+      if (existing) {
+        const existingPaymentUrl = existing.rawCallback?.data?.octo_pay_url;
+
+        if (existingPaymentUrl) {
+          return res.json({
+            paymentUrl: existingPaymentUrl,
+            paymentId: existing.octoPaymentId || null,
+            orderId: existing.id,
+            reused: true,
+          });
+        }
+
+        if (!isFailedStatus(existing.status) && existing.status !== "prepare_failed") {
+          return res.status(409).json({
+            error: "Payment request is already being prepared",
+            code: "PAYMENT_IN_PROGRESS",
+            orderId: existing.id,
+          });
+        }
+
+        await pool.query(
+          `UPDATE pending_payments SET "idempotencyKey"=NULL WHERE id=$1`,
+          [existing.id],
+        );
+      }
+    }
+
     const availabilityCheck = await checkManyBookingsAvailability(bookings);
 
     if (!availabilityCheck.available) {
@@ -1242,9 +1512,11 @@ app.post("/api/create-payment", async (req, res) => {
     }
 
     const orderId = crypto.randomUUID();
+    createdOrderId = orderId;
 
     await savePendingPayment({
       orderId,
+      idempotencyKey: idempotencyKey || null,
       amount,
       phone,
       email,
@@ -1335,6 +1607,25 @@ app.post("/api/create-payment", async (req, res) => {
     });
   } catch (err) {
     console.error("OCTO ERROR:", err.response?.data || err.message);
+
+    if (err.code === "23505") {
+      return res.status(409).json({
+        error: "Duplicate payment request",
+        code: "DUPLICATE_PAYMENT_REQUEST",
+      });
+    }
+
+    if (createdOrderId) {
+      try {
+        await updatePendingPaymentMeta({
+          orderId: createdOrderId,
+          status: "prepare_failed",
+          rawCallback: err.response?.data || { error: err.message },
+        });
+      } catch (updateError) {
+        console.error("PAYMENT FAILURE STATUS UPDATE ERROR:", updateError.message);
+      }
+    }
 
     res.status(500).json({
       error: "Payment failed",
@@ -1478,16 +1769,30 @@ app.post("/notify/telegram", async (req, res) => {
       });
     }
 
-    const url = `https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`;
+    const fingerprint = createNotificationFingerprint(req.body);
+    const notificationKey = await claimRecentNotification(
+      fingerprint,
+      "contact",
+    );
 
-    const telegramResponse = await axios.post(url, {
-      chat_id: chatId,
+    if (!notificationKey) {
+      return res.json({ success: true, duplicate: true });
+    }
+
+    const telegramResult = await sendTelegramOnce({
+      idempotencyKey: notificationKey,
+      kind: "contact",
+      entityId: notificationKey.split(":")[1],
+      botToken: process.env.BOT_TOKEN,
+      chatId,
       text,
     });
 
     res.json({
       success: true,
-      message_id: telegramResponse.data?.result?.message_id,
+      duplicate: telegramResult.duplicate,
+      feedback_id: notificationKey.split(":")[1],
+      message_id: telegramResult.messageId,
     });
   } catch (error) {
     console.log("TELEGRAM ERROR:", error.response?.data || error.message);
@@ -1523,14 +1828,28 @@ app.post("/notify/booking", async (req, res) => {
 ✅ Mijoz kelganda, mavjud bo‘lgan ixtiyoriy bo‘sh kapsulaga joylashtiriladi
 🌐 Sayt: qonoqcapsule.uz`;
 
-    const url = `https://api.telegram.org/bot${process.env.BOOKING_BOT_TOKEN}/sendMessage`;
+    const bookingId = booking.id || null;
+    const notificationKey = bookingId
+      ? `booking:${bookingId}`
+      : await claimRecentNotification(
+          createNotificationFingerprint(booking),
+          "booking",
+        );
 
-    await axios.post(url, {
-      chat_id: chatId,
+    if (!notificationKey) {
+      return res.json({ success: true, duplicate: true });
+    }
+
+    const telegramResult = await sendTelegramOnce({
+      idempotencyKey: notificationKey,
+      kind: "booking",
+      entityId: bookingId || notificationKey.split(":")[1],
+      botToken: process.env.BOOKING_BOT_TOKEN,
+      chatId,
       text,
     });
 
-    res.json({ success: true });
+    res.json({ success: true, duplicate: telegramResult.duplicate });
   } catch (err) {
     console.log("TELEGRAM BOOKING ERROR:", err.response?.data || err.message);
     res.status(500).json({ success: false });

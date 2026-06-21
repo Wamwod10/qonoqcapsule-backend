@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation, Trans } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import {
@@ -12,7 +12,8 @@ import {
 } from "../../data/bookingConfig";
 import "./header.scss";
 
-const API_BASE = "https://qonoqcapsule-backend.onrender.com";
+const API_BASE =
+  import.meta.env.VITE_API_URL || "https://qonoqcapsule-backend.onrender.com";
 const AVAILABILITY_URL = `${API_BASE}/api/check-availability`;
 const REQUEST_TIMEOUT_MS = 12000;
 
@@ -30,6 +31,7 @@ const Header = () => {
   const [submitError, setSubmitError] = useState("");
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
+  const submitLockRef = useRef(false);
 
   const branchConfig = useMemo(
     () => getBranchConfig(locationValue),
@@ -125,7 +127,8 @@ const Header = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!validate() || loading) return;
+    if (!validate() || submitLockRef.current || loading) return;
+    submitLockRef.current = true;
 
     const capsuleConfig = getCapsuleTypeConfig(capsuleType);
 
@@ -147,6 +150,7 @@ const Header = () => {
           time: data?.nextTime || "",
           nextDay: Boolean(data?.nextDay),
         });
+        submitLockRef.current = false;
         setLoading(false);
         return;
       }
@@ -163,11 +167,13 @@ const Header = () => {
             });
 
       setSubmitError(message);
+      submitLockRef.current = false;
       setLoading(false);
       return;
     }
 
     if (!branchConfig) {
+      submitLockRef.current = false;
       setLoading(false);
       return; // ❗ bu yerda QATTIQ to‘xtaydi
     }
@@ -185,9 +191,12 @@ const Header = () => {
 
     try {
       sessionStorage.setItem("qonoq_booking", JSON.stringify(bookingState));
-    } catch {}
+    } catch (error) {
+      console.error("BOOKING STORAGE WRITE ERROR:", error);
+    }
 
     setLoading(false);
+    submitLockRef.current = false;
     navigate(branchConfig.path, { state: bookingState });
   };
 

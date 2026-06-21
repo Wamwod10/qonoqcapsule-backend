@@ -1,4 +1,10 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
 import "./capsmodal.scss";
 import { useTranslation } from "react-i18next";
@@ -13,6 +19,8 @@ const CapsModal = ({ onClose }) => {
 
   const [closing, setClosing] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+  const confirmLockRef = useRef(false);
+  const [isConfirming, setIsConfirming] = useState(false);
   const [form, setForm] = useState({
     firstName: "",
     lastName: "",
@@ -38,14 +46,14 @@ const CapsModal = ({ onClose }) => {
   const duration = bookingBase.durationValue || "4h";
   const price = getCapsulePrice(branchKey, capsuleType, duration);
 
-  const closeAll = () => {
+  const closeAll = useCallback(() => {
     setClosing(true);
 
     setTimeout(() => {
       setShowConfirm(false);
       onClose?.();
     }, 300);
-  };
+  }, [onClose]);
 
   useEffect(() => {
     const escHandler = (e) => {
@@ -61,7 +69,7 @@ const CapsModal = ({ onClose }) => {
       document.removeEventListener("keydown", escHandler);
       document.body.style.overflow = "auto";
     };
-  }, []);
+  }, [closeAll]);
 
   const sanitizePhone = (value) => {
     return String(value || "").replace(/[^\d+]/g, "");
@@ -123,7 +131,9 @@ const CapsModal = ({ onClose }) => {
   };
 
   const handleConfirm = () => {
-    if (!validateForm()) return;
+    if (confirmLockRef.current || !validateForm()) return;
+    confirmLockRef.current = true;
+    setIsConfirming(true);
 
     const newBooking = {
       id:
@@ -151,6 +161,8 @@ const CapsModal = ({ onClose }) => {
     } catch (err) {
       console.error("LOCALSTORAGE WRITE ERROR:", err);
       alert("Could not save booking. Please try again.");
+      confirmLockRef.current = false;
+      setIsConfirming(false);
     }
   };
 
@@ -230,8 +242,14 @@ const CapsModal = ({ onClose }) => {
             </div>
 
             <div className="capsmodal__actions">
-              <button className="btn btn-confirm" onClick={handleConfirm}>
-                {t("capsmodal_confirm")}
+              <button
+                className="btn btn-confirm"
+                onClick={handleConfirm}
+                disabled={isConfirming}
+              >
+                {isConfirming
+                  ? t("saving", { defaultValue: "Saving..." })
+                  : t("capsmodal_confirm")}
               </button>
 
               <button className="btn cancel" onClick={closeAll}>

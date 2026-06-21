@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import BookingCard from "./components/Bookingcard/BookingCard";
 import "./mybooking.scss";
 import { useTranslation } from "react-i18next";
@@ -6,8 +6,9 @@ import { TbMoodEmpty } from "react-icons/tb";
 import axios from "axios";
 import { getBranchConfig } from "../../data/bookingConfig";
 
-const API = "https://qonoqcapsule-backend.onrender.com";
-// const API = "http://localhost:5000";
+const API =
+  import.meta.env.VITE_API_URL || "https://qonoqcapsule-backend.onrender.com";
+const PAYMENT_REQUEST_STORAGE_KEY = "qonoq_payment_request";
 
 const MyBooking = () => {
   const { t } = useTranslation();
@@ -17,6 +18,8 @@ const MyBooking = () => {
   const [checking, setChecking] = useState(false);
   const [paying, setPaying] = useState(false);
   const [busyInfo, setBusyInfo] = useState(null);
+  const paymentLockRef = useRef(false);
+  const paymentRequestRef = useRef(null);
 
   /* ===== HELPERS ===== */
 
@@ -90,6 +93,67 @@ const MyBooking = () => {
       duration: getDuration(b),
       price: Number(b.price || 0),
     }));
+  };
+
+  const getPaymentIdempotencyKey = (preparedBookings) => {
+    const fingerprint = JSON.stringify({
+      amount: totalUZS,
+      bookings: preparedBookings.map((booking) => ({
+        id: booking.id,
+        branch: booking.branch,
+        capsuleType: booking.capsuleType,
+        date: booking.date,
+        time: booking.time,
+        duration: booking.duration,
+        price: booking.price,
+      })),
+    });
+
+    if (paymentRequestRef.current?.fingerprint === fingerprint) {
+      return paymentRequestRef.current.key;
+    }
+
+    try {
+      const saved = JSON.parse(
+        sessionStorage.getItem(PAYMENT_REQUEST_STORAGE_KEY) || "null",
+      );
+
+      if (saved?.fingerprint === fingerprint && saved?.key) {
+        paymentRequestRef.current = saved;
+        return saved.key;
+      }
+    } catch (err) {
+      console.error("PAYMENT REQUEST STORAGE READ ERROR:", err);
+    }
+
+    const request = {
+      fingerprint,
+      key:
+        globalThis.crypto?.randomUUID?.() ||
+        `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    };
+    paymentRequestRef.current = request;
+
+    try {
+      sessionStorage.setItem(
+        PAYMENT_REQUEST_STORAGE_KEY,
+        JSON.stringify(request),
+      );
+    } catch (err) {
+      console.error("PAYMENT REQUEST STORAGE WRITE ERROR:", err);
+    }
+
+    return request.key;
+  };
+
+  const clearPaymentRequest = () => {
+    paymentRequestRef.current = null;
+
+    try {
+      sessionStorage.removeItem(PAYMENT_REQUEST_STORAGE_KEY);
+    } catch (err) {
+      console.error("PAYMENT REQUEST STORAGE CLEAR ERROR:", err);
+    }
   };
 
   /* ===== LOAD BOOKINGS ===== */
@@ -173,10 +237,14 @@ const MyBooking = () => {
 
   const handlePayment = async () => {
     if (bookings.length === 0) return;
-    if (paying || checking) return;
+    if (paymentLockRef.current || paying || checking) return;
+    paymentLockRef.current = true;
 
     const ok = await checkAllAvailability();
-    if (!ok) return;
+    if (!ok) {
+      paymentLockRef.current = false;
+      return;
+    }
 
     try {
       setPaying(true);
@@ -191,14 +259,18 @@ const MyBooking = () => {
         email: normalizeEmail(firstBooking.email),
         name: getFullName(firstBooking),
       };
+      const idempotencyKey = getPaymentIdempotencyKey(preparedBookings);
 
-      const res = await axios.post(`${API}/api/create-payment`, payload);
+      const res = await axios.post(`${API}/api/create-payment`, payload, {
+        headers: { "Idempotency-Key": idempotencyKey },
+      });
 
       const { paymentUrl } = res.data || {};
 
       if (paymentUrl) {
         window.location.href = paymentUrl;
       } else {
+        clearPaymentRequest();
         alert("Payment link not received");
       }
     } catch (err) {
@@ -213,11 +285,15 @@ const MyBooking = () => {
           nextDay: data?.nextDay || false,
         });
       } else if (err.response?.data?.error) {
+        if (err.response.data.error === "OCTO prepare_payment failed") {
+          clearPaymentRequest();
+        }
         alert(err.response.data.error);
       } else {
         alert("Payment error. Try again.");
       }
     } finally {
+      paymentLockRef.current = false;
       setPaying(false);
     }
   };

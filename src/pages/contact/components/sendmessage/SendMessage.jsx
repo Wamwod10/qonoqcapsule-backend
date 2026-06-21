@@ -76,6 +76,8 @@ const CustomSelect = ({
 
 const SendMessage = () => {
   const { t } = useTranslation();
+  const submitLockRef = useRef(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [formData, setFormData] = useState({
     fullName: "",
@@ -105,6 +107,10 @@ const SendMessage = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    if (submitLockRef.current) return;
+    submitLockRef.current = true;
+    setIsSubmitting(true);
 
     const selectedBranch = BRANCH_ORDER.find(
       (branch) => branch.key === formData.branch,
@@ -154,7 +160,11 @@ const SendMessage = () => {
         message: "",
       });
     } catch (error) {
+      console.error("CONTACT FORM ERROR:", error);
       alert(t("send_error"));
+    } finally {
+      submitLockRef.current = false;
+      setIsSubmitting(false);
     }
   };
 
@@ -241,8 +251,11 @@ const SendMessage = () => {
               />
 
               <div className="sendmessage__form-but">
-                <button type="submit" disabled={!isFormValid}>
-                  {t("send_button")} <LuSend />
+                <button type="submit" disabled={!isFormValid || isSubmitting}>
+                  {isSubmitting
+                    ? t("sending", { defaultValue: "Sending..." })
+                    : t("send_button")} {" "}
+                  {!isSubmitting && <LuSend />}
                 </button>
               </div>
             </div>

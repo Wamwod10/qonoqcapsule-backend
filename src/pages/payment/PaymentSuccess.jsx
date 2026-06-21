@@ -3,8 +3,8 @@ import "./paymentsuccess.scss";
 import { FaCheck } from "react-icons/fa";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
-const API = "https://qonoqcapsule-backend.onrender.com";
-// const API = "http://localhost:5000";
+const API =
+  import.meta.env.VITE_API_URL || "https://qonoqcapsule-backend.onrender.com";
 
 const PaymentSuccess = () => {
   const navigate = useNavigate();
@@ -62,6 +62,7 @@ const PaymentSuccess = () => {
         ) {
           setStatus("success");
           localStorage.removeItem("my_bookings");
+          sessionStorage.removeItem("qonoq_payment_request");
         } else if (
           [
             "failed",
@@ -71,6 +72,7 @@ const PaymentSuccess = () => {
             "rejected",
             "prepare_failed",
             "paid_but_slot_unavailable",
+            "callback_validation_failed",
           ].includes(paymentStatus)
         ) {
           setStatus("failed");
